@@ -10,10 +10,9 @@ const files = [
   "lib/validation.ts",
   "lib/api.ts",
   "lib/types.ts",
-  "lib/themes.ts",
   "lib/questions.ts",
-  "lib/providers/mock-ai.ts",
-  "lib/providers/music.ts",
+  "lib/providers/mock-brief.ts",
+  "lib/prompt-format.ts",
 ];
 for (const file of files) {
   const output = join(directory, file.replace(/\.ts$/, ".js"));

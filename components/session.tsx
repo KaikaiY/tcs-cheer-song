@@ -8,7 +8,7 @@ import {
   useRef,
 } from "react";
 import { emptyAnswers } from "@/lib/questions";
-import { isRecord, isStyle, parseSong, parseMusic } from "@/lib/validation";
+import { isRecord, isStyle, parseCreativeBrief } from "@/lib/validation";
 import type { Session } from "@/lib/types";
 const KEY = "tcs-cheer-v1";
 const fresh = (): Session => ({
@@ -61,10 +61,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             if (isRecord(value.result)) {
               try {
                 next.result = {
-                  song: parseSong(value.result.song),
-                  music: parseMusic(value.result.music),
-                  lyricsMode:
-                    value.result.lyricsMode === "live" ? "live" : "mock",
+                  brief: parseCreativeBrief(value.result.brief),
+                  briefMode: value.result.briefMode === "live" ? "live" : "mock",
                 };
               } catch {
                 /* Invalid result is discarded. */

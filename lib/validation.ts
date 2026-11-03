@@ -1,10 +1,9 @@
 import { questions } from "./questions";
 import type {
   Answers,
-  Song,
   Style,
   Submission,
-  MusicGenerationResult,
+  CreativeBrief,
 } from "./types";
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -44,55 +43,31 @@ export function parseSubmission(v: unknown): Submission {
     ) as Answers,
   };
 }
-const lines = (v: unknown, maxItems = 12) =>
-  Array.isArray(v) &&
-  v.length > 0 &&
-  v.length <= maxItems &&
-  v.every((x) => safeText(x, 180) && (x as string).trim().length > 0);
-export function parseSong(v: unknown): Song {
+const timelineIds = ["intro", "verse", "chorus", "bridge", "finalChorus", "outro"] as const;
+export function parseCreativeBrief(v: unknown): CreativeBrief {
   if (
     !isRecord(v) ||
-    !safeText(v.title, 80) ||
-    !(v.title as string).trim() ||
+    v.version !== "v1" ||
     !isStyle(v.style) ||
-    v.durationSeconds !== 120 ||
-    !isRecord(v.lyrics) ||
-    !lines(v.lyrics.verse) ||
-    !lines(v.lyrics.chorus) ||
-    !isRecord(v.musicPrompt) ||
-    !lines(v.musicPrompt.positiveStyles) ||
-    !lines(v.musicPrompt.negativeStyles) ||
-    !lines(v.visualKeywords, 6) ||
-    !Array.isArray(v.sections) ||
-    v.sections.length < 4 ||
-    !v.sections.every((section) => isRecord(section) && typeof section.id === "string" && safeText(section.label, 20) && typeof section.startSeconds === "number" && typeof section.endSeconds === "number" && section.startSeconds >= 0 && section.endSeconds > section.startSeconds && lines(section.lines, 8))
+    v.targetDurationSeconds !== 120 ||
+    !safeText(v.elevenMusicPrompt, 3000) ||
+    !(v.elevenMusicPrompt as string).trim() ||
+    !safeText(v.flowMusicPrompt, 3000) ||
+    !(v.flowMusicPrompt as string).trim() ||
+    !Array.isArray(v.timeline) ||
+    v.timeline.length !== timelineIds.length ||
+    !v.timeline.every((section, index) => isRecord(section) && section.id === timelineIds[index] && safeText(section.label, 20) && typeof section.startSeconds === "number" && typeof section.endSeconds === "number" && section.startSeconds >= 0 && section.endSeconds > section.startSeconds && ["low", "medium", "high"].includes(section.energy as string) && safeText(section.visualCategory, 40) && (section.visualCategory as string).trim()) ||
+    (v.timeline as Record<string, unknown>[])[0]?.startSeconds !== 0 ||
+    (v.timeline as Record<string, unknown>[]).at(-1)?.endSeconds !== 120 ||
+    !(v.timeline as Record<string, unknown>[]).every((section, index, items) => index === 0 || section.startSeconds === items[index - 1]?.endSeconds)
   )
     throw new Error("生成データの形式が正しくありません。");
   return {
-    title: v.title as string,
+    version: "v1",
     style: v.style,
-    durationSeconds: 120,
-    lyrics: {
-      verse: v.lyrics.verse as string[],
-      chorus: v.lyrics.chorus as string[],
-    },
-    musicPrompt: {
-      positiveStyles: v.musicPrompt.positiveStyles as string[],
-      negativeStyles: v.musicPrompt.negativeStyles as string[],
-    },
-    visualKeywords: v.visualKeywords as string[],
-    sections: v.sections as Song["sections"],
+    targetDurationSeconds: 120,
+    elevenMusicPrompt: (v.elevenMusicPrompt as string).trim(),
+    flowMusicPrompt: (v.flowMusicPrompt as string).trim(),
+    timeline: v.timeline as CreativeBrief["timeline"],
   };
-}
-export function parseMusic(v: unknown): MusicGenerationResult {
-  if (
-    !isRecord(v) ||
-    !["/audio/cheer-demo.wav", "/audio/idol-demo.wav"].includes(
-      v.audioUrl as string,
-    ) ||
-    v.durationSeconds !== 120 ||
-    v.mode !== "mock"
-  )
-    throw new Error("音楽データが正しくありません。");
-  return { audioUrl: v.audioUrl as string, durationSeconds: 120, mode: "mock" };
 }

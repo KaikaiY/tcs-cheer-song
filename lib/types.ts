@@ -20,29 +20,23 @@ export type Character = {
 };
 
 export type Submission = { consent: true; answers: Answers; style: Style };
-export type LyricSection = {
+export type TimelineItem = {
   id: "intro" | "verse" | "chorus" | "bridge" | "finalChorus" | "outro";
   label: string;
   startSeconds: number;
   endSeconds: number;
-  lines: string[];
+  energy: "low" | "medium" | "high";
+  visualCategory: string;
 };
-export type Song = {
-  title: string;
+export type CreativeBrief = {
+  version: "v1";
   style: Style;
-  durationSeconds: number;
-  lyrics: { verse: string[]; chorus: string[] };
-  sections: LyricSection[];
-  musicPrompt: { positiveStyles: string[]; negativeStyles: string[] };
-  visualKeywords: string[];
+  targetDurationSeconds: 120;
+  elevenMusicPrompt: string;
+  flowMusicPrompt: string;
+  timeline: TimelineItem[];
 };
-export type MusicGenerationInput = Song;
-export type MusicGenerationResult = {
-  audioUrl: string;
-  durationSeconds: number;
-  mode: "mock" | "live";
-};
-export type Result = { song: Song; music: MusicGenerationResult; lyricsMode: "mock" | "live" };
+export type Result = { brief: CreativeBrief; briefMode: "mock" | "live" };
 export type Session = {
   consent: boolean;
   answers: Answers;
