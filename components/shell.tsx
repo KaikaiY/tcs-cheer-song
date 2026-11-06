@@ -3,13 +3,14 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "./session";
 import { answerErrors } from "@/lib/validation";
+import type { Style } from "@/lib/types";
 
 export function Guard({ level, children }: { level: "consent" | "answers" | "character" | "result"; children: React.ReactNode }) {
   const { data, ready } = useSession();
   const router = useRouter();
   let destination = "";
   if (ready) {
-    if (!data.consent) destination = "/";
+    if (!data.consent || !data.style) destination = "/";
     else if (["character", "result"].includes(level) && Object.keys(answerErrors(data.answers)).length) destination = "/questions";
     else if (level === "result" && !data.result) destination = "/character";
   }
@@ -18,6 +19,6 @@ export function Guard({ level, children }: { level: "consent" | "answers" | "cha
   return children;
 }
 
-export function Stage({ children, progress = 0 }: { children: React.ReactNode; progress?: number }) {
-  return <main className="screen"><header className="stage-header"><div className="title-logo"><span>AI</span><b>オリジナル<br />応援ソング</b></div><div className="progress" aria-label={`進行状況 ${progress}%`}><i style={{ width: `${progress}%` }} /></div><span className="stage-caption">あなたの毎日に、エールを。</span></header>{children}</main>;
+export function Stage({ children, progress = 0, theme = "" }: { children: React.ReactNode; progress?: number; theme?: Style | "" }) {
+  return <main className={`screen ${theme ? `theme-${theme}` : "theme-select"}`}><header className="stage-header"><div className="title-logo"><span>AI</span><b>オリジナル<br />応援ソング</b></div><div className="progress" aria-label={`進行状況 ${progress}%`}><i style={{ width: `${progress}%` }} /></div><span className="stage-caption">あなたの毎日に、エールを。</span></header>{children}</main>;
 }
