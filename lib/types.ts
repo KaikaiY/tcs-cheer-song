@@ -28,12 +28,23 @@ export type TimelineItem = {
   energy: "low" | "medium" | "high";
   visualCategory: string;
 };
+export type MusicSyncSection = {
+  id: string;
+  name: string;
+  startMs: number;
+  endMs: number;
+  energy: "low" | "medium" | "high";
+};
+export type MusicSyncPlan = {
+  version: "v1";
+  durationMs: number;
+  sections: MusicSyncSection[];
+};
 export type CreativeBrief = {
   version: "v1";
   style: Style;
-  targetDurationSeconds: 120;
+  targetDurationSeconds: 90;
   elevenMusicPrompt: string;
-  flowMusicPrompt: string;
   timeline: TimelineItem[];
 };
 export type Result = { brief: CreativeBrief; briefMode: "mock" | "live" };

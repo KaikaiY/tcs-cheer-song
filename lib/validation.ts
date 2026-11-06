@@ -49,25 +49,22 @@ export function parseCreativeBrief(v: unknown): CreativeBrief {
     !isRecord(v) ||
     v.version !== "v1" ||
     !isStyle(v.style) ||
-    v.targetDurationSeconds !== 120 ||
+    v.targetDurationSeconds !== 90 ||
     !safeText(v.elevenMusicPrompt, 3000) ||
     !(v.elevenMusicPrompt as string).trim() ||
-    !safeText(v.flowMusicPrompt, 3000) ||
-    !(v.flowMusicPrompt as string).trim() ||
     !Array.isArray(v.timeline) ||
     v.timeline.length !== timelineIds.length ||
     !v.timeline.every((section, index) => isRecord(section) && section.id === timelineIds[index] && safeText(section.label, 20) && typeof section.startSeconds === "number" && typeof section.endSeconds === "number" && section.startSeconds >= 0 && section.endSeconds > section.startSeconds && ["low", "medium", "high"].includes(section.energy as string) && safeText(section.visualCategory, 40) && (section.visualCategory as string).trim()) ||
     (v.timeline as Record<string, unknown>[])[0]?.startSeconds !== 0 ||
-    (v.timeline as Record<string, unknown>[]).at(-1)?.endSeconds !== 120 ||
+    (v.timeline as Record<string, unknown>[]).at(-1)?.endSeconds !== 90 ||
     !(v.timeline as Record<string, unknown>[]).every((section, index, items) => index === 0 || section.startSeconds === items[index - 1]?.endSeconds)
   )
     throw new Error("生成データの形式が正しくありません。");
   return {
     version: "v1",
     style: v.style,
-    targetDurationSeconds: 120,
+    targetDurationSeconds: 90,
     elevenMusicPrompt: (v.elevenMusicPrompt as string).trim(),
-    flowMusicPrompt: (v.flowMusicPrompt as string).trim(),
     timeline: v.timeline as CreativeBrief["timeline"],
   };
 }

@@ -4,7 +4,7 @@ import struct
 import wave
 from pathlib import Path
 RATE = 16000
-DURATION = 120
+DURATION = 90
 Path('public/audio').mkdir(exist_ok=True)
 for name, bpm, melody in [('cheer', 130, [60, 64, 67, 72, 67, 64, 62, 67]), ('idol', 140, [72, 76, 79, 76, 74, 77, 81, 79])]:
     with wave.open(f'public/audio/{name}-demo.wav', 'wb') as output:

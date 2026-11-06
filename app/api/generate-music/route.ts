@@ -3,7 +3,7 @@ import { ElevenLabsClient, ElevenLabsError, Music } from "@elevenlabs/elevenlabs
 import { privateHeaders, readBody, safeOrigin } from "@/lib/api";
 import { isRecord } from "@/lib/validation";
 
-const DURATION_MS = 120_000;
+const DURATION_MS = 90_000;
 const WINDOW_MS = 10 * 60_000;
 const MAX_REQUESTS_PER_WINDOW = 2;
 const attemptsByClient = new Map<string, number[]>();
@@ -13,7 +13,7 @@ function validPrompt(value: unknown) {
     && value.length > 0
     && value.length <= 4_100
     && value.includes("【必須仕様・最優先】")
-    && value.includes("曲の長さ：120秒（2分00秒）");
+    && value.includes("曲の長さ：90秒（1分30秒）");
 }
 
 function clientId(request: Request) {
@@ -76,6 +76,24 @@ function lyricsFromCompositionPlan(plan: unknown) {
   return [];
 }
 
+function energyForSection(name: string) {
+  const normalized = name.toLowerCase();
+  if (/chorus|hook|drop|サビ/.test(normalized)) return "high" as const;
+  if (/intro|outro|イン.?ロ|アウトロ/.test(normalized)) return "low" as const;
+  return "medium" as const;
+}
+
+function visualSyncFromLyrics(lyrics: ReturnType<typeof lyricsFromCompositionPlan>) {
+  let startMs = 0;
+  const sections = lyrics.map((section, index) => {
+    const endMs = startMs + section.durationMs;
+    const value = { id: `part-${index + 1}`, name: section.name, startMs, endMs, energy: energyForSection(section.name) };
+    startMs = endMs;
+    return value;
+  });
+  return { version: "v1", durationMs: startMs || DURATION_MS, sections };
+}
+
 export async function POST(request: Request) {
   if (!safeOrigin(request)) return Response.json({ error: "この操作は許可されていません。" }, { status: 403, headers: privateHeaders });
   let prompt: unknown;
@@ -102,9 +120,11 @@ export async function POST(request: Request) {
     );
     // music_v1 responds with sections; music_v2_5 responds with chunks.
     const lyrics = lyricsFromCompositionPlan(result.json.compositionPlan);
+    const visualSync = visualSyncFromLyrics(lyrics);
     const response = new FormData();
     response.append("audio", new Blob([new Uint8Array(result.audio)], { type: "audio/mpeg" }), result.filename || "ai-cheer-song.mp3");
     response.append("lyrics", JSON.stringify(lyrics));
+    response.append("visualSync", JSON.stringify(visualSync));
     // The wrapper's MultipartResponse type currently omits this optional API field.
     const wordTimestamps = (result.json as typeof result.json & { wordsTimestamps?: unknown[] }).wordsTimestamps || [];
     response.append("wordTimestamps", JSON.stringify(wordTimestamps));

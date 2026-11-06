@@ -5,4 +5,4 @@ export const characters: Record<Style, Character> = {
   female_idol: { id: "female_idol", name: "エールちゃん", vocalType: "女性", musicStyle: "明るいアイドル風", description: "笑顔とポップな歌で、軽やかに励ます。", image: "/characters/idol.svg", accent: "#c04b92" },
 };
 export const themes = characters;
-export const animationConfig = { duration: 120 };
+export const animationConfig = { duration: 90 };
