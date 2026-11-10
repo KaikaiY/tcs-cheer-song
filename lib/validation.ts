@@ -1,9 +1,10 @@
-import { questions } from "./questions";
+import { questions, requiredAnswerIds } from "./questions";
 import type {
   Answers,
   Style,
   Submission,
   CreativeBrief,
+  SongProfile,
 } from "./types";
 export const isRecord = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -26,21 +27,29 @@ export function answerErrors(
   }
   return errors;
 }
+export function requiredAnswerErrors(value: unknown): Partial<Record<keyof Answers, string>> {
+  const all = answerErrors(value);
+  return Object.fromEntries(requiredAnswerIds.flatMap((id) => all[id] ? [[id, all[id]]] : [])) as Partial<Record<keyof Answers, string>>;
+}
+
+export function parseSongProfile(value: unknown): SongProfile {
+  if (!isRecord(value) || value.version !== "v1" || !safeText(value.summary, 500) || !(value.summary as string).trim() || !Array.isArray(value.personalMotifs) || !Array.isArray(value.musicalHints) || value.personalMotifs.length > 4 || value.musicalHints.length > 4 || !value.personalMotifs.every((item) => safeText(item, 100) && (item as string).trim()) || !value.musicalHints.every((item) => safeText(item, 100) && (item as string).trim())) throw new Error("楽曲プロフィールの形式が正しくありません。");
+  return { version: "v1", summary: (value.summary as string).trim(), personalMotifs: value.personalMotifs.map((item) => (item as string).trim()), musicalHints: value.musicalHints.map((item) => (item as string).trim()) };
+}
 export function parseSubmission(v: unknown): Submission {
   if (
     !isRecord(v) ||
     v.consent !== true ||
     !isStyle(v.style) ||
-    Object.keys(answerErrors(v.answers)).length
+    Object.keys(requiredAnswerErrors(v.answers)).length
   )
     throw new Error("入力内容を確認してください。");
   const a = v.answers as Answers;
   return {
     consent: true,
     style: v.style,
-    answers: Object.fromEntries(
-      questions.map((q) => [q.id, a[q.id].trim()]),
-    ) as Answers,
+    answers: Object.fromEntries(questions.map((q) => [q.id, typeof a[q.id] === "string" ? a[q.id].trim() : ""])) as Answers,
+    profile: parseSongProfile(v.profile),
   };
 }
 const timelineIds = ["intro", "verse", "chorus", "bridge", "finalChorus", "outro"] as const;

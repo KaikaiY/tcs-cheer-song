@@ -2,16 +2,18 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "./session";
-import { answerErrors } from "@/lib/validation";
+import { requiredAnswerErrors } from "@/lib/validation";
 
-export function Guard({ level, children }: { level: "consent" | "answers" | "character" | "result"; children: React.ReactNode }) {
+export function Guard({ level, children }: { level: "consent" | "character" | "talk" | "answers" | "result"; children: React.ReactNode }) {
   const { data, ready } = useSession();
   const router = useRouter();
   let destination = "";
   if (ready) {
     if (!data.consent) destination = "/";
-    else if (["character", "result"].includes(level) && Object.keys(answerErrors(data.answers)).length) destination = "/questions";
-    else if (level === "result" && !data.result) destination = "/character";
+    else if (["talk", "answers", "result"].includes(level) && !data.style) destination = "/character";
+    else if (["answers", "result"].includes(level) && Object.keys(requiredAnswerErrors(data.answers)).length) destination = "/talk";
+    else if (["answers", "result"].includes(level) && !data.profile) destination = "/talk";
+    else if (level === "result" && !data.result) destination = "/generating";
   }
   useEffect(() => { if (destination) router.replace(destination); }, [destination, router]);
   if (!ready || destination) return <main className="screen loading-screen"><p>読み込み中…</p></main>;

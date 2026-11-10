@@ -11,7 +11,9 @@ const files = [
   "lib/api.ts",
   "lib/types.ts",
   "lib/questions.ts",
+  "lib/talk.ts",
   "lib/providers/mock-brief.ts",
+  "lib/providers/mock-profile.ts",
   "lib/prompt-format.ts",
 ];
 for (const file of files) {

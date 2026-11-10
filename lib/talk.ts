@@ -1,0 +1,34 @@
+import { emptyAnswers, questions, requiredAnswerIds } from "./questions";
+import type { Answers, Style } from "./types";
+
+export type TalkRequest = { style: Style; answers: Answers; message: string };
+export type TalkReply = { reply: string; answers: Answers; complete: boolean; nextQuestionId: keyof Answers | null };
+
+export function mergeTalkAnswers(current: Answers, proposed: Partial<Answers>): Answers {
+  const next = { ...current };
+  for (const question of questions) {
+    const candidate = proposed[question.id];
+    if (!next[question.id] && typeof candidate === "string" && candidate.trim() && candidate.length <= question.max) next[question.id] = candidate.trim();
+  }
+  return next;
+}
+
+export function nextQuestionId(answers: Answers): keyof Answers | null {
+  return requiredAnswerIds.find((id) => !answers[id].trim()) || null;
+}
+
+export function isComplete(answers: Answers) {
+  return nextQuestionId(answers) === null;
+}
+
+export function fillExpectedAnswer(answers: Answers, message: string): Answers {
+  const expected = nextQuestionId(answers);
+  if (!expected) return answers;
+  const question = questions.find((item) => item.id === expected)!;
+  const text = message.trim().slice(0, question.max);
+  return text ? { ...answers, [expected]: text } : answers;
+}
+
+export function emptyTalkAnswers() {
+  return { ...emptyAnswers };
+}

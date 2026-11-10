@@ -8,7 +8,7 @@ import {
   useRef,
 } from "react";
 import { emptyAnswers } from "@/lib/questions";
-import { isRecord, isStyle, parseCreativeBrief } from "@/lib/validation";
+import { isRecord, isStyle, parseCreativeBrief, parseSongProfile } from "@/lib/validation";
 import type { Session } from "@/lib/types";
 const KEY = "tcs-cheer-v1";
 const fresh = (): Session => ({
@@ -16,6 +16,7 @@ const fresh = (): Session => ({
   answers: { ...emptyAnswers },
   style: "",
   questionIndex: 0,
+  conversation: [],
 });
 const Context = createContext<{
   data: Session;
@@ -57,7 +58,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 value.questionIndex < 6
                   ? value.questionIndex
                   : 0,
+              conversation: Array.isArray(value.conversation)
+                ? value.conversation.flatMap((message) => isRecord(message) && (message.role === "user" || message.role === "assistant") && typeof message.text === "string" && message.text.length <= 500 ? [{ role: message.role, text: message.text }] : [])
+                : [],
             };
+            if (isRecord(value.profile)) {
+              try { next.profile = parseSongProfile(value.profile); } catch { /* Invalid profile is discarded. */ }
+            }
             if (isRecord(value.result)) {
               try {
                 next.result = {

@@ -8,6 +8,17 @@ export type Answers = {
   strength: string;
   musicPreference: string;
 };
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
+
+export type SongProfile = {
+  version: "v1";
+  summary: string;
+  personalMotifs: string[];
+  musicalHints: string[];
+};
 
 export type Character = {
   id: Style;
@@ -19,7 +30,7 @@ export type Character = {
   accent: string;
 };
 
-export type Submission = { consent: true; answers: Answers; style: Style };
+export type Submission = { consent: true; answers: Answers; profile: SongProfile; style: Style };
 export type TimelineItem = {
   id: "intro" | "verse" | "chorus" | "bridge" | "finalChorus" | "outro";
   label: string;
@@ -53,5 +64,7 @@ export type Session = {
   answers: Answers;
   style: Style | "";
   questionIndex: number;
+  conversation: ConversationMessage[];
+  profile?: SongProfile;
   result?: Result;
 };

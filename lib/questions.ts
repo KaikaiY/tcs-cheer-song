@@ -10,3 +10,11 @@ export const questions: { id: keyof Answers; label: string; shortLabel: string; 
 ];
 
 export const emptyAnswers: Answers = { nickname: "", currentEffort: "", futureGoal: "", encouragementTarget: "", strength: "", musicPreference: "" };
+
+// These are the only facts needed before the conversation becomes an open-ended etude.
+export const requiredAnswerIds: (keyof Answers)[] = [
+  "nickname",
+  "currentEffort",
+  "futureGoal",
+  "encouragementTarget",
+];
