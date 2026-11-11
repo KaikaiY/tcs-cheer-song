@@ -41,7 +41,7 @@ export function parseSubmission(v: unknown): Submission {
     !isRecord(v) ||
     v.consent !== true ||
     !isStyle(v.style) ||
-    Object.keys(requiredAnswerErrors(v.answers)).length
+    !isRecord(v.answers)
   )
     throw new Error("入力内容を確認してください。");
   const a = v.answers as Answers;

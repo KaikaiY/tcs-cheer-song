@@ -1,11 +1,12 @@
 import type { Answers, ConversationMessage, SongProfile, Style } from "../types";
 
 export function mockSongProfile(input: { style: Style; answers: Answers; conversation: ConversationMessage[] }): SongProfile {
-  const extras = input.conversation.filter((message) => message.role === "user").map((message) => message.text).filter((text) => !Object.values(input.answers).includes(text)).slice(-2);
+  const extras = input.conversation.filter((message) => message.role === "user").map((message) => message.text).filter(Boolean).slice(-4);
+  const summary = extras.length ? `${input.answers.nickname || "あなた"}さんとの会話から、前へ進もうとする気持ちと、その人らしい挑戦の姿を受け取りました。会話で語られた想いを応援歌にします。` : "会話から受け取った前向きな想いを、あなただけの応援歌にします。";
   return {
     version: "v1",
-    summary: `${input.answers.nickname}さんは、${input.answers.currentEffort}に取り組み、${input.answers.futureGoal}を目指しています。${input.answers.encouragementTarget}を力強く後押しする応援歌にします。`,
-    personalMotifs: [input.answers.currentEffort, input.answers.futureGoal, ...extras].filter(Boolean).slice(0, 4),
+    summary,
+    personalMotifs: extras,
     musicalHints: [input.answers.musicPreference, input.answers.strength].filter(Boolean).slice(0, 4),
   };
 }

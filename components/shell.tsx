@@ -2,7 +2,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "./session";
-import { requiredAnswerErrors } from "@/lib/validation";
 
 export function Guard({ level, children }: { level: "consent" | "character" | "talk" | "answers" | "result"; children: React.ReactNode }) {
   const { data, ready } = useSession();
@@ -11,7 +10,6 @@ export function Guard({ level, children }: { level: "consent" | "character" | "t
   if (ready) {
     if (!data.consent) destination = "/";
     else if (["talk", "answers", "result"].includes(level) && !data.style) destination = "/character";
-    else if (["answers", "result"].includes(level) && Object.keys(requiredAnswerErrors(data.answers)).length) destination = "/talk";
     else if (["answers", "result"].includes(level) && !data.profile) destination = "/talk";
     else if (level === "result" && !data.result) destination = "/generating";
   }

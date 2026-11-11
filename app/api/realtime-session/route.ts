@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ session: { type: "realtime", model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1-mini", instructions, audio: { input: { transcription: { model: "gpt-4o-mini-transcribe", language: "ja", prompt: "会話は日本語。ニックネーム、固有名詞、略称は推測で英語化せず、聞こえた日本語のまま文字起こしする。" }, turn_detection: { type: "semantic_vad" } }, output: { voice } } } }),
+    body: JSON.stringify({ session: { type: "realtime", model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1-mini", instructions, audio: { input: { transcription: { model: process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-transcribe", language: "ja", prompt: "会話は日本語。ニックネーム、固有名詞、略称は推測で英語化せず、聞こえた日本語のまま文字起こしする。" }, turn_detection: { type: "semantic_vad" } }, output: { voice } } } }),
     cache: "no-store",
   });
   const value: unknown = await response.json().catch(() => null);
