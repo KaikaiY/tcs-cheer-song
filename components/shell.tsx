@@ -18,6 +18,6 @@ export function Guard({ level, children }: { level: "consent" | "character" | "t
   return children;
 }
 
-export function Stage({ children, progress = 0 }: { children: React.ReactNode; progress?: number }) {
-  return <main className="screen"><header className="stage-header"><div className="title-logo"><span>AI</span><b>オリジナル<br />応援ソング</b></div><div className="progress" aria-label={`進行状況 ${progress}%`}><i style={{ width: `${progress}%` }} /></div><span className="stage-caption">あなたの毎日に、エールを。</span></header>{children}</main>;
+export function Stage({ children, progress = 0, minimal = false }: { children: React.ReactNode; progress?: number; minimal?: boolean }) {
+  return <main className={`screen${minimal ? " landing-screen" : ""}`} style={minimal ? { display: "block", background: "#111" } : undefined}>{!minimal && <header className="stage-header"><div className="title-logo"><span>AI</span><b>オリジナル<br />応援ソング</b></div><div className="progress" aria-label={`進行状況 ${progress}%`}><i style={{ width: `${progress}%` }} /></div><span className="stage-caption">あなたの毎日に、エールを。</span></header>}{children}</main>;
 }

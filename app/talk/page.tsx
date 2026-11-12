@@ -4,25 +4,40 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Guard, Stage } from "@/components/shell";
 import { RealtimeVoice } from "@/components/realtime-voice";
+import { DemoVoice } from "@/components/demo-voice";
 import { useSession } from "@/components/session";
 import { characters } from "@/lib/themes";
 import { mergeTalkAnswers } from "@/lib/talk";
+import { demoProfile } from "@/lib/demo";
 import type { Answers, ConversationMessage, SongProfile, Style } from "@/lib/types";
 
-export default function TalkPage() { return <Guard level="talk"><TalkInterview /></Guard>; }
+export default function TalkPage() {
+  return <Guard level="talk"><TalkInterview /></Guard>;
+}
 
 function TalkInterview() {
   const { data, update } = useSession();
   const router = useRouter();
   const [summarizing, setSummarizing] = useState(false);
-  const [captions, setCaptions] = useState<{ user: string; assistant: string }>({ user: "", assistant: "" });
+  const [captions, setCaptions] = useState({ user: "", assistant: "" });
   const [error, setError] = useState("");
   const style = data.style as Style;
   const character = characters[style];
-  const initial = useMemo<ConversationMessage>(() => ({ role: "assistant", text: data.style === "male_cheer_squad" ? "よし、任せろ！ まずは、応援歌の中で呼んでほしいニックネームを教えてくれ。" : "一緒に最高の応援歌を作ろう！ まず、歌の中で呼んでほしいニックネームを教えてね。" }), [data.style]);
+  const isDemo = data.mode === "demo";
+  const initial = useMemo<ConversationMessage>(() => ({
+    role: "assistant",
+    text: style === "male_cheer_squad"
+      ? "よし、任せろ！ まずは、応援歌の中で呼んでほしいニックネームを教えてくれ。"
+      : "一緒に最高の応援歌を作ろう！ まず、歌の中で呼んでほしいニックネームを教えてね。",
+  }), [style]);
   const messages = useMemo(() => data.conversation.length ? data.conversation : [initial], [data.conversation, initial]);
   const conversationRef = useRef(messages);
   const answersRef = useRef(data.answers);
+  const latest = messages.at(-1) ?? initial;
+  const liveLine = captions.assistant || captions.user;
+  const isLiveAssistant = Boolean(captions.assistant);
+  const background = style === "male_cheer_squad" ? "/backgrounds/cheer-captain-field-empty.png" : "/backgrounds/idol-stage-empty.png";
+
   useEffect(() => { conversationRef.current = messages; }, [messages]);
   useEffect(() => { answersRef.current = data.answers; }, [data.answers]);
 
@@ -30,14 +45,19 @@ function TalkInterview() {
     if (summarizing) return;
     setSummarizing(true); setError("");
     try {
-      const response = await fetch("/api/compose-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style: data.style, answers: data.answers, conversation: messages }) });
+      const response = await fetch("/api/compose-profile", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style, answers: data.answers, conversation: messages }) });
       const value: unknown = await response.json().catch(() => null);
       if (!response.ok || !isProfileResponse(value)) throw new Error(isError(value) ? value.error : "会話内容を整理できませんでした。");
       update({ profile: value.profile, result: undefined });
-      router.push("/confirm");
+      router.push("/generating");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "会話内容を整理できませんでした。");
     } finally { setSummarizing(false); }
+  }
+
+  function continueDemo() {
+    update({ ...demoProfile(style), result: undefined });
+    router.push("/generating");
   }
 
   async function saveTranscript(role: "user" | "assistant", transcript: string) {
@@ -52,7 +72,7 @@ function TalkInterview() {
     };
     if (role === "assistant") { append(role, text); return; }
     try {
-      const response = await fetch("/api/talk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style: data.style, answers: answersRef.current, message: text }) });
+      const response = await fetch("/api/talk", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style, answers: answersRef.current, message: text }) });
       const value: unknown = await response.json();
       if (response.ok && isTalkResponse(value)) append(role, text, value.answers);
       else append(role, text);
@@ -64,7 +84,30 @@ function TalkInterview() {
     if (final) window.setTimeout(() => setCaptions((current) => current[role] === transcript ? { ...current, [role]: "" } : current), 4000);
   }
 
-  return <Stage progress={58}><section className={`talk-slide ${data.style}`}><aside className="talk-aside"><img src={character.image} alt={character.name} /><div><p className="kicker">YOUR CHEER PARTNER</p><h1>{character.name}</h1><p>{character.description}</p></div></aside><div className="talk-main"><header><p className="kicker">TALK SESSION</p><h2>あなたの話から、応援歌を育てよう</h2><p>思い出でも、今の気持ちでも大丈夫。パートナーが会話の中から曲のヒントを見つけます。</p></header><RealtimeVoice style={style} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /><div className="live-captions" aria-live="polite">{captions.user && <p className="user">あなた：{captions.user}</p>}{captions.assistant && <p className="assistant">{character.name}：{captions.assistant}</p>}</div><div className="talk-log" aria-live="polite">{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}>{message.text}</p>)}</div>{error && <p className="inline-error" role="alert">{error}</p>}<p className="voice-only-note">会話を終えたら、内容を応援歌用に整理できます。</p><div className="talk-complete"><button className="button warm" onClick={composeProfile} disabled={summarizing}>{summarizing ? "会話を整理中…" : "会話を終えて応援歌を作る　→"}</button></div></div></section></Stage>;
+  const speaker = liveLine ? (isLiveAssistant ? character.name : "あなた") : (latest.role === "assistant" ? character.name : "あなた");
+  const line = liveLine || latest.text;
+
+  return <Stage minimal>
+    <section className={`vn-scene ${style}`}>
+      <div className="vn-background" style={{ backgroundImage: `linear-gradient(180deg, #07101a42 20%, #070a13b8 100%), url('${background}')` }} />
+      <div className="vn-vignette" aria-hidden="true" />
+      <img className="vn-character" src={character.image} alt={character.name} />
+      <div className="vn-topline"><span>CHEER SONG SESSION</span><span>01 / TALK</span></div>
+      <div className="vn-dialogue">
+        <div className={`vn-nameplate ${latest.role}`}><span>{speaker}</span><small>{speaker === "あなた" ? "YOU" : "CHEER PARTNER"}</small></div>
+        <p className="vn-line" aria-live="polite">{line}</p>
+        <div className="vn-controls">
+          {isDemo ? <DemoVoice characterName={character.name} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
+          <button className="vn-finish" onClick={isDemo ? continueDemo : composeProfile} disabled={summarizing}>{summarizing ? "会話を整理中…" : "会話を終える　→"}</button>
+        </div>
+        {error && <p className="inline-error" role="alert">{error}</p>}
+        <details className="vn-history">
+          <summary>会話ログを見る <span>{messages.length}</span></summary>
+          <div>{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}><b>{message.role === "assistant" ? character.name : "あなた"}</b>{message.text}</p>)}</div>
+        </details>
+      </div>
+    </section>
+  </Stage>;
 }
 
 function isError(value: unknown): value is { error: string } { return !!value && typeof value === "object" && "error" in value && typeof (value as { error?: unknown }).error === "string"; }

@@ -13,6 +13,7 @@ import type { Session } from "@/lib/types";
 const KEY = "tcs-cheer-v1";
 const fresh = (): Session => ({
   consent: false,
+  mode: "live",
   answers: { ...emptyAnswers },
   style: "",
   questionIndex: 0,
@@ -50,6 +51,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }
             const next: Session = {
               consent: true,
+              mode: value.mode === "demo" ? "demo" : "live",
               answers,
               style: isStyle(value.style) ? value.style : "",
               questionIndex:

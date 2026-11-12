@@ -1,4 +1,5 @@
 export type Style = "male_cheer_squad" | "female_idol";
+export type RunMode = "demo" | "live";
 
 export type Answers = {
   nickname: string;
@@ -61,6 +62,7 @@ export type CreativeBrief = {
 export type Result = { brief: CreativeBrief; briefMode: "mock" | "live" };
 export type Session = {
   consent: boolean;
+  mode: RunMode;
   answers: Answers;
   style: Style | "";
   questionIndex: number;
