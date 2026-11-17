@@ -1,5 +1,6 @@
 export type Style = "male_cheer_squad" | "female_idol";
 export type RunMode = "demo" | "live";
+export type MockScenario = "quick" | "wait30" | "wait120" | "fail" | "retry-success" | "audio-fail";
 
 export type Answers = {
   nickname: string;
@@ -60,6 +61,7 @@ export type CreativeBrief = {
   timeline: TimelineItem[];
 };
 export type Result = { brief: CreativeBrief; briefMode: "mock" | "live" };
+export type MusicJob = { id: string; status: "preparing" | "generating" | "ready" | "failed"; error?: string; profile?: SongProfile; result?: Result; title?: string; lyrics?: string; visualSync?: string; wordTimestamps?: string };
 export type Session = {
   consent: boolean;
   mode: RunMode;
@@ -69,4 +71,6 @@ export type Session = {
   conversation: ConversationMessage[];
   profile?: SongProfile;
   result?: Result;
+  musicJob?: MusicJob;
+  mockScenario?: MockScenario;
 };

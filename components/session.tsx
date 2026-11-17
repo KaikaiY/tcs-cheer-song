@@ -9,7 +9,7 @@ import {
 } from "react";
 import { emptyAnswers } from "@/lib/questions";
 import { isRecord, isStyle, parseCreativeBrief, parseSongProfile } from "@/lib/validation";
-import type { Session } from "@/lib/types";
+import type { MockScenario, Session } from "@/lib/types";
 const KEY = "tcs-cheer-v1";
 const fresh = (): Session => ({
   consent: false,
@@ -64,6 +64,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 ? value.conversation.flatMap((message) => isRecord(message) && (message.role === "user" || message.role === "assistant") && typeof message.text === "string" && message.text.length <= 500 ? [{ role: message.role, text: message.text }] : [])
                 : [],
             };
+            if (["quick", "wait30", "wait120", "fail", "retry-success", "audio-fail"].includes(value.mockScenario as string)) next.mockScenario = value.mockScenario as MockScenario;
             if (isRecord(value.profile)) {
               try { next.profile = parseSongProfile(value.profile); } catch { /* Invalid profile is discarded. */ }
             }
@@ -75,6 +76,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 };
               } catch {
                 /* Invalid result is discarded. */
+              }
+            }
+            if (isRecord(value.musicJob) && typeof value.musicJob.id === "string" && ["preparing", "generating", "ready", "failed"].includes(value.musicJob.status as string)) {
+              next.musicJob = {
+                id: value.musicJob.id,
+                status: value.musicJob.status as NonNullable<Session["musicJob"]>["status"],
+                error: typeof value.musicJob.error === "string" ? value.musicJob.error : undefined,
+                title: typeof value.musicJob.title === "string" ? value.musicJob.title.slice(0, 160) : undefined,
+                lyrics: typeof value.musicJob.lyrics === "string" ? value.musicJob.lyrics.slice(0, 20_000) : undefined,
+                visualSync: typeof value.musicJob.visualSync === "string" ? value.musicJob.visualSync.slice(0, 20_000) : undefined,
+                wordTimestamps: typeof value.musicJob.wordTimestamps === "string" ? value.musicJob.wordTimestamps.slice(0, 50_000) : undefined,
+              };
+              if (isRecord(value.musicJob.profile)) {
+                try { next.musicJob.profile = parseSongProfile(value.musicJob.profile); } catch { /* Invalid profile is discarded. */ }
+              }
+              if (isRecord(value.musicJob.result)) {
+                try {
+                  next.musicJob.result = {
+                    brief: parseCreativeBrief(value.musicJob.result.brief),
+                    briefMode: value.musicJob.result.briefMode === "live" ? "live" : "mock",
+                  };
+                } catch { /* Invalid result is discarded. */ }
               }
             }
             current.current = next;

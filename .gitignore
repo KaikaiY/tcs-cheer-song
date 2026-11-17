@@ -19,6 +19,7 @@
 
 # production
 /build
+/.tcs-runtime/
 
 # misc
 .DS_Store
