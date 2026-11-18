@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Style } from "@/lib/types";
 
-type Props = { style: Style; phase?: "interview" | "waiting"; autoStart?: boolean; guidance?: "create" | "ready"; onTranscript: (role: "user" | "assistant", text: string) => void; onLiveTranscript: (role: "user" | "assistant", text: string, final: boolean) => void };
+type Props = { style: Style; nickname?: string; phase?: "interview" | "waiting"; autoStart?: boolean; guidance?: "create" | "ready"; onTranscript: (role: "user" | "assistant", text: string) => void; onLiveTranscript: (role: "user" | "assistant", text: string, final: boolean) => void };
 
-export function RealtimeVoice({ style, phase = "interview", autoStart = false, guidance, onTranscript, onLiveTranscript }: Props) {
+export function RealtimeVoice({ style, nickname, phase = "interview", autoStart = false, guidance, onTranscript, onLiveTranscript }: Props) {
   const [state, setState] = useState<"idle" | "connecting" | "live" | "error">("idle");
   const [message, setMessage] = useState("");
   const pc = useRef<RTCPeerConnection | null>(null);
@@ -20,28 +20,28 @@ export function RealtimeVoice({ style, phase = "interview", autoStart = false, g
   useEffect(() => () => stop(), []);
   useEffect(() => {
     if (state !== "live" || !channelRef.current || channelRef.current.readyState !== "open" || phase !== "waiting") return;
-    channelRef.current.send(JSON.stringify({ type: "session.update", session: { instructions: style === "male_cheer_squad" ? "応援歌の制作は始まりました。ここからは完成までの自由な雑談です。新しい情報を曲に反映すると約束せず、質問や確認を繰り返さずに、熱く短い言葉で自然に会話を続けてください。" : "応援歌の制作は始まりました。ここからは完成までの自由な雑談です。新しい情報を曲に反映すると約束せず、質問や確認を繰り返さずに、明るくやわらかい言葉で自然に会話を続けてください。" } }));
+    channelRef.current.send(JSON.stringify({ type: "session.update", session: { instructions: "あなたはDJ イエローバードです。応援歌の準備はすでに始まりました。ここからは完成までの短い雑談です。ボクを一人称に、やさしい敬語の日本語で話し、新しい希望、曲調、歌詞、エピソードを質問したり曲に反映すると約束したりしません。技術的な説明はしません。" } }));
     setMessage("選曲中です。完成を待ちながら、DJと自由に話せます。");
   }, [phase, state, style]);
   useEffect(() => {
     if (!guidance || spokenGuidance.current === guidance || state !== "live" || !channelRef.current || channelRef.current.readyState !== "open") return;
     spokenGuidance.current = guidance;
     const text = guidance === "create"
-      ? "応援歌を作る材料がそろったよ。画面の『この内容で応援歌をつくる』を押してね。"
-      : "選曲がまとまりました。画面の『DJの曲紹介を聞く』から、今夜の一曲を聴いてください。";
+      ? "お話、しっかり受け取りました。ボクのスタジオで、あなたのための一曲を準備しますね。"
+      : "お待たせしました！あなたに贈る今日だけの一曲、準備できましたよ。";
     channelRef.current.send(JSON.stringify({ type: "response.create", response: { modalities: ["audio", "text"], instructions: `利用者へ次の案内だけを、キャラクターらしい自然な日本語で伝えてください。${text}` } }));
   }, [guidance, state]);
   async function start() {
     setState("connecting"); setMessage("");
     try {
-      const session = await fetch("/api/realtime-session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style, phase }) }).then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error(value.error || "接続準備に失敗しました。"); return value as { clientSecret: string; model: string; maxSeconds: number }; });
+      const session = await fetch("/api/realtime-session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style, phase, nickname }) }).then(async (response) => { const value = await response.json(); if (!response.ok) throw new Error(value.error || "接続準備に失敗しました。"); return value as { clientSecret: string; model: string; maxSeconds: number }; });
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
       const connection = new RTCPeerConnection(); pc.current = connection;
       connection.ontrack = (event) => { if (!audio.current) { audio.current = document.createElement("audio"); audio.current.autoplay = true; } audio.current.srcObject = event.streams[0]; audio.current.play().catch(() => undefined); };
       stream.current.getTracks().forEach((track) => connection.addTrack(track, stream.current!));
       const channel = connection.createDataChannel("oai-events");
       channelRef.current = channel;
-      channel.onopen = () => channel.send(JSON.stringify({ type: "response.create", response: { modalities: ["audio", "text"], instructions: phase === "interview" ? "会話をあなたから必ず始めてください。最初に短い歓迎のあいさつをして、『応援歌を一緒に作ろう』と伝えたうえで、呼ばれたいニックネームを聞いてください。" : "応援歌の制作中なので、あなたから明るく自然な雑談を始めてください。" } }));
+      channel.onopen = () => channel.send(JSON.stringify({ type: "response.create", response: { modalities: ["audio", "text"], instructions: phase === "interview" ? nickname ? `DJ イエローバードとして会話をあなたから始めてください。${nickname}さんを歓迎し、名前は聞かずに「今日の応援歌は、誰に届けましょうか？」と一つだけ聞いてください。` : "DJ イエローバードとして会話をあなたから始めてください。短く歓迎してラジオネームを一度だけ聞いてください。" : "DJ イエローバードとして、あなたから温かい短い雑談を始めてください。" } }));
       channel.onmessage = (event) => {
         try {
           const value = JSON.parse(event.data) as { type?: string; transcript?: string; delta?: string; response?: { output?: Array<{ content?: Array<{ transcript?: string }> }> } };

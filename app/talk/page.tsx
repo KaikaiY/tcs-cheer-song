@@ -24,17 +24,19 @@ function TalkInterview() {
   const [summarizing, setSummarizing] = useState(false);
   const [caption, setCaption] = useState<{ role: "user" | "assistant"; text: string } | null>(null);
   const [error, setError] = useState("");
+  const [jobConnectionLost, setJobConnectionLost] = useState(false);
   const [job, setJob] = useState(data.musicJob);
   const jobStartLock = useRef(false);
   const demoAttempts = useRef(0);
   const style = data.style as Style;
   const isDemo = data.mode === "demo";
+  const nickname = data.answers.nickname.trim();
   const initial = useMemo<ConversationMessage>(() => ({
     role: "assistant",
-    text: style === "male_cheer_squad"
-      ? "TCS RADIO、ただいま生放送中！ 今夜は、あなたの話から一曲を選曲していく。うまく話そうとしなくて大丈夫だ。まず、なんて呼べばいい？"
-      : "TCS RADIO、ただいま生放送中。今夜は、あなたのお話から一曲を選曲していくよ。うまく話そうとしなくて大丈夫。まず、なんて呼べばいい？",
-  }), [style]);
+    text: nickname
+      ? `お電話つながりました！こんにちは〜。こちらTCS RADIO、DJ イエローバードです。${nickname}さん、今日の応援歌は、誰に届けましょうか？`
+      : "お電話つながりました！こんにちは〜。こちらTCS RADIO、DJ イエローバードです。ラジオネームを教えてもらえますか？",
+  }), [nickname]);
   const messages = useMemo(() => data.conversation.length ? data.conversation : [initial], [data.conversation, initial]);
   const conversationRef = useRef(messages);
   const answersRef = useRef(data.answers);
@@ -76,12 +78,55 @@ function TalkInterview() {
 
   useEffect(() => {
     if (!job || !["preparing", "generating"].includes(job.status) || isDemo) return;
-    const timer = window.setInterval(async () => { try { const response = await fetch(`/api/music-jobs/${job.id}`); const next: unknown = await response.json(); if (response.ok && isRecord(next) && typeof next.status === "string") { const typed = next as typeof job; setJob(typed); update({ musicJob: typed, profile: typed.profile, result: typed.result }); } } catch { /* Job continues on the server. */ } }, 1200);
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/music-jobs/${job.id}`);
+        const next: unknown = await response.json();
+        if (response.ok && isRecord(next) && typeof next.status === "string") {
+          const typed = next as typeof job;
+          setJob(typed);
+          update({ musicJob: typed, profile: typed.profile, result: typed.result });
+          return;
+        }
+        // The local server keeps jobs in memory.  A dev-server restart therefore
+        // cannot be treated as an endless "selecting" state.
+        if (response.status === 404) {
+          const failed = { ...job, status: "failed" as const, error: "放送スタジオとの接続が切れました。会話内容はこの画面に残っています。" };
+          setJob(failed);
+          update({ musicJob: failed });
+          setJobConnectionLost(true);
+        }
+      } catch {
+        // A temporary polling failure must not stop the server-side music job.
+      }
+    }, 1200);
     return () => window.clearInterval(timer);
   }, [isDemo, job, update]);
 
-  function openResult() { if (!job?.result) return; if (job.status === "ready" && !isDemo) saveGeneratedMusic({ audioUrl: `/api/music-jobs/${job.id}/audio`, title: job.title || "AIオリジナル応援ソング", lyrics: job.lyrics || null, visualSync: job.visualSync || null, wordTimestamps: job.wordTimestamps || null }); update({ profile: job.profile, result: job.result, musicJob: job }); router.push("/result"); }
-  async function retryMusic() { if (!job) return; if (isDemo) { continueDemo(); return; } const response = await fetch(`/api/music-jobs/${job.id}/retry`, { method: "POST" }); if (response.ok) { const next = { ...job, status: "generating" as const, error: undefined }; setJob(next); update({ musicJob: next }); } else setError("もう一度つなげませんでした。スタッフにお知らせください。"); }
+  function openResult() {
+    if (!job?.result || job.status !== "ready") return;
+    if (!isDemo) saveGeneratedMusic({ audioUrl: `/api/music-jobs/${job.id}/audio`, title: job.title || "AIオリジナル応援ソング", lyrics: job.lyrics || null, visualSync: job.visualSync || null, wordTimestamps: job.wordTimestamps || null });
+    update({ profile: job.profile, result: job.result, musicJob: job });
+    router.push("/result");
+  }
+  async function retryMusic() {
+    if (!job) return;
+    if (isDemo) { continueDemo(); return; }
+    const response = await fetch(`/api/music-jobs/${job.id}/retry`, { method: "POST" });
+    if (response.ok) {
+      const next = { ...job, status: "generating" as const, error: undefined };
+      setJob(next); update({ musicJob: next }); setJobConnectionLost(false);
+    } else if (response.status === 404) {
+      setJobConnectionLost(true);
+      setError("この開発サーバーでは、再起動前の制作ジョブを続きから再開できません。");
+    } else setError("もう一度つなげませんでした。スタッフにお知らせください。");
+  }
+
+  function restartLostJob() {
+    jobStartLock.current = false;
+    setJobConnectionLost(false);
+    void composeProfile();
+  }
 
   async function saveTranscript(role: "user" | "assistant", transcript: string) {
     const text = transcript.trim().slice(0, 500);
@@ -137,21 +182,21 @@ function TalkInterview() {
       <div className="radio-on-air" aria-hidden="true"><b>ON AIR</b><span>LIVE CALL</span></div>
       <div className="vn-topline"><span>TCS RADIO · LIVE CALL</span><span>90 SECOND ANTHEM</span></div>
       <div className="vn-dialogue">
-        <div className="vn-nameplate assistant"><span>TCS RADIO</span><small>DJ · LIVE ON AIR</small></div>
+        <div className="vn-nameplate assistant"><span>DJ イエローバード</span><small>TCS RADIO · LIVE ON AIR</small></div>
         <p className="vn-line" aria-live="polite">{line}</p>
-        {userIsSpeaking && <p className="vn-listening" role="status">あなたの声を聞いています…</p>}
+        {userIsSpeaking && <p className="vn-listening" role="status"><b>CALLER ON LINE</b><span>あなたの声を聞いています</span></p>}
         {job && job.status !== "ready" && <p className="talk-phase" role="status"><b>ON AIR · 選曲中</b><span>あなたの話をもとに、一曲を整えています。このままDJとの会話は続けられます。</span></p>}
         <div className="vn-controls">
-          {isDemo ? <DemoVoice onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} phase={job ? "waiting" : "interview"} autoStart guidance={job?.status === "ready" ? "ready" : undefined} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
-          {job?.status === "ready" && <button className="vn-finish" onClick={openResult}>DJの曲紹介を聞く　→</button>}
+          {isDemo ? <DemoVoice onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} nickname={nickname} phase={job ? "waiting" : "interview"} autoStart guidance={job?.status === "ready" ? "ready" : undefined} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
+          {job?.status === "ready" && <button className="vn-finish" onClick={openResult}>今夜の一曲を聴く　→</button>}
         </div>
-        {!job && <label className="nickname-check">呼び名の聞き取り確認・修正<input value={data.answers.nickname} onChange={(event) => correctNickname(event.target.value)} placeholder="例：かいかい" maxLength={24} /></label>}
+        {!job && !nickname && <label className="nickname-check">呼び名の聞き取り確認・修正<input value={data.answers.nickname} onChange={(event) => correctNickname(event.target.value)} placeholder="例：かいかい" maxLength={24} /></label>}
         {isDemo && !job && <label className="mock-control">モック検証用<select value={data.mockScenario || "quick"} onChange={(event) => update({ mockScenario: event.target.value as MockScenario })}>{(Object.keys(mockLabels) as MockScenario[]).map((scenario) => <option key={scenario} value={scenario}>{mockLabels[scenario]}</option>)}</select></label>}
         {error && <p className="inline-error" role="alert">{error}</p>}
-        {job?.status === "failed" && <p className="inline-error" role="alert">{job.error || "曲の準備がうまくいきませんでした。"}<button className="vn-finish" onClick={retryMusic}>もう一度つなぐ</button></p>}
+        {job?.status === "failed" && <p className="inline-error" role="alert">{job.error || "曲の準備がうまくいきませんでした。"}<button className="vn-finish" onClick={retryMusic}>もう一度つなぐ</button>{jobConnectionLost && <button className="vn-finish" onClick={restartLostJob}>会話内容からもう一度準備する</button>}</p>}
         <details className="vn-history">
           <summary>会話ログを見る <span>{messages.length}</span></summary>
-          <div>{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}><b>{message.role === "assistant" ? "TCS RADIO" : "あなた"}</b>{message.text}</p>)}</div>
+          <div>{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}><b>{message.role === "assistant" ? "DJ イエローバード" : "あなた"}</b>{message.text}</p>)}</div>
         </details>
       </div>
     </section>

@@ -30,21 +30,26 @@ export function startMusicJob(input: { id: string; style: Style; answers: Answer
 }
 
 async function run(job: InternalJob, input: { style: Style; answers: Answers; conversation: ConversationMessage[] }) {
+  const signal = AbortSignal.timeout(120_000);
+  const mock = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
+  let profile;
   try {
-    const signal = AbortSignal.timeout(120_000);
-    const mock = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
-    const profile = parseSongProfile(mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
-    job.profile = profile;
+    profile = parseSongProfile(mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
+  } catch { failJob(job, "会話内容を楽曲プロフィールに整理できませんでした。会話を続けてから、もう一度お試しください。"); return; }
+  job.profile = profile;
+  try {
     const submission = { consent: true as const, style: input.style, answers: input.answers, profile };
     const brief = addMandatorySpec(parseCreativeBrief(mock ? mockCreativeBrief(submission) : await openaiCreativeBrief(submission, signal)));
     job.result = { brief, briefMode: mock ? "mock" : "live" };
-    job.status = "generating";
-    await finishMusic(job);
-  } catch (error) {
-    job.status = "failed";
-    job.error = error instanceof Error && error.message.includes("Eleven Music") ? error.message : "楽曲の生成に失敗しました。音楽生成だけ再試行できます。";
+  } catch { failJob(job, "楽曲の設計書を作成できませんでした。時間をおいて、音楽生成をもう一度お試しください。"); return; }
+  job.status = "generating";
+  try { await finishMusic(job); } catch (error) {
+    const detail = error instanceof Error && error.message.includes("Eleven Music") ? error.message : "Eleven Musicで楽曲を作成できませんでした。音楽生成だけ再試行できます。";
+    failJob(job, detail);
   }
 }
+
+function failJob(job: InternalJob, error: string) { job.status = "failed"; job.error = error; }
 
 async function finishMusic(job: InternalJob) {
     if (!job.result) throw new Error("楽曲設計書が見つかりません。");

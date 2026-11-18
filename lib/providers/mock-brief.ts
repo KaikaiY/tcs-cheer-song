@@ -10,11 +10,8 @@ const baseTimeline: TimelineItem[] = [
 ];
 
 export function mockCreativeBrief(input: Submission): CreativeBrief {
-  const character = input.style === "male_cheer_squad"
-    ? "力強い男性応援団のリード、ブラスバンド、太鼓、短いコール&レスポンス"
-    : "明るい女性アイドルのボーカル、きらめくシンセ、軽快なビート";
   const profile = input.profile;
-  const shared = `日本語の約90秒のオリジナル応援ソング。歌詞と歌唱は音楽AI自身が作る。応援を感情的な軸にしつつ、音楽の表現は自由にする。会話の要約「${profile.summary}」。個性的なモチーフ「${profile.personalMotifs.join(" / ") || "会話から得た個性"}」。音楽的な手がかり「${profile.musicalHints.join(" / ") || "曲の展開に合う自由な表現"}」を、音色・リズム・ボーカルの届け方・サビの開放感へ反映する。${character}。聞き取りやすい日本語ボーカルと、最後に前を向ける応援の着地を守る。イントロ、Aメロ、覚えやすいサビ、Bメロ、最後のサビ、明るいアウトロを目安にしつつ、音楽的な展開には自由度を残す。実在アーティスト名、曲名、既存歌詞の模倣はしない。`;
+  const shared = `日本語の約90秒のオリジナル応援ソング。歌詞と歌唱は音楽AI自身が作る。応援を感情的な軸にしつつ、会話の雰囲気に合う歌手の声質、音色、リズム、テンポ、ジャンルを自由に選ぶ。会話の要約「${profile.summary}」。個性的なモチーフ「${profile.personalMotifs.join(" / ") || "会話から得た個性"}」。音楽的な手がかり「${profile.musicalHints.join(" / ") || "曲の展開に合う自由な表現"}」を、ボーカルの届け方とサビの開放感へ反映する。聞き取りやすい日本語ボーカルと、最後に前を向ける応援の着地を守る。イントロ、Aメロ、覚えやすいサビ、Bメロ、最後のサビ、明るいアウトロを目安にしつつ、音楽的な展開には自由度を残す。実在アーティスト名、曲名、既存歌詞の模倣はしない。`;
   return {
     version: "v1",
     style: input.style,

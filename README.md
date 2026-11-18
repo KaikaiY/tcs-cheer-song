@@ -1,6 +1,8 @@
-# AIオリジナル応援ソング — 音楽生成比較実験
+# TCS RADIO — AIオリジナル応援ソング
 
-Next.js / TypeScript の会場向け実験版です。6つの回答とキャラクター選択から、OpenAIがEleven Music用の「楽曲設計書」を生成し、Eleven Music APIで約90秒の音源を生成・ページ内再生します。
+テックキャンプ文化祭向けの Next.js / TypeScript 製試作です。来場者がラジオネームを入力してDJへ電話をかけ、会話から得た内容をもとに、約90秒のオリジナル応援歌を届けます。
+
+現在の主要導線は `experiment/radio-dj-flow` で試作中です。`main` はこのDJ試作をまだ取り込んでいません。
 
 ## 起動
 
@@ -9,14 +11,21 @@ npm ci
 npm run dev
 ```
 
-http://localhost:3000 を開きます。APIキー未設定時、または `USE_MOCK_AI=true` のときはモック設計書を返すため、課金なしで画面・コピー・タイムラインを確認できます。
+通常は `http://localhost:3000` を開きます。すでに別の開発サーバーが動いている場合は、表示された別ポートを使用してください。
 
-1. 同意後、6問に回答し、内容を確認します。
-2. 男性応援団または女性アイドルを選びます。
-3. OpenAIが、Eleven Music用のプロンプトと、90秒の映像演出目安を作成します。
-4. 「Eleven Musicで曲を生成」を押すと、90秒・1パターンの音源、生成された歌詞、再生位置に対応する単語、実際の映像同期用JSONをページ内に表示します。
-5. 再生成は1回だけ許可されます。追加クレジットを消費する確認を表示します。
-6. 「トップ画面へ」で回答と設計書をsessionStorageから削除します。音源はブラウザのメモリだけにあり、保存されません。
+### デモモード
+
+トップ画面の「デモモード」を有効にすると、OpenAI、Eleven Music、Realtime API、マイクを使わずに体験フローを確認できます。デモ用の成功・遅延・失敗・再試行・再生失敗の状態も通話画面から選択できます。
+
+### 本番モードの流れ
+
+1. ラジオネームを入力し、DJへ電話をかける。
+2. DJ イエローバードが会話から、応援する相手・具体的なエピソード・届けたい言葉・曲の雰囲気を聞く。
+3. 必要情報がそろうと、会話スナップショットを固定して裏側で楽曲プロフィール、Eleven Music用プロンプト、90秒音源を順に作る。
+4. 曲の準備中も、DJとの短い雑談を続けられる。
+5. 音源完成後、利用者操作で再生画面へ進む。
+
+音楽生成ジョブは開発サーバーのメモリで管理します。開発サーバーを再起動した場合、進行中ジョブは復元できません。生成済み音源は `.tcs-runtime/music/` にローカル保存され、このディレクトリはGit管理外です。
 
 ## 環境変数
 
@@ -26,6 +35,8 @@ http://localhost:3000 を開きます。APIキー未設定時、または `USE_M
 | --- | --- |
 | `OPENAI_API_KEY` | サーバー専用。未設定ならモック |
 | `OPENAI_MODEL` | 未設定なら `gpt-4.1-mini` |
+| `OPENAI_REALTIME_MODEL` | 任意。未設定なら `gpt-realtime-2.1` |
+| `OPENAI_TRANSCRIPTION_MODEL` | 任意。未設定なら `gpt-transcribe` |
 | `USE_MOCK_AI` | `true` ならキーがあってもモック |
 | `ELEVENLABS_API_KEY` | サーバー専用。Eleven Music APIで曲を生成するキー |
 
@@ -37,25 +48,35 @@ USE_MOCK_AI=false
 ELEVENLABS_API_KEY=自分のEleven Music APIキー
 ```
 
-キーをチャット、Git、ログ、`NEXT_PUBLIC_` 変数に入れないでください。OpenAIの呼び出しはサーバーの `/api/generate-brief` だけが行い、Responses API、Structured Outputs、`store:false`、45秒タイムアウト、自動リトライなしを使います。Eleven Musicの呼び出しもサーバーの `/api/generate-music` だけが行い、90秒・1パターン・120秒のタイムアウトに固定しています。
+キーをチャット、Git、ログ、`NEXT_PUBLIC_` 変数に入れないでください。`.env.local` は各開発者がローカルにだけ作成します。
 
-## 比較の進め方
-
-OpenAIは歌詞を出力せず、曲尺・曲展開・歌声・テンポ・利用者の回答を含む「制作指示書」を返します。歌詞・歌唱・伴奏はEleven Music自身に生成させます。APIには曲尺を `90000ms` として渡します。OpenAIの6区間は映像演出の目安であり、生成後にEleven Musicが返す実チャンク時刻を映像同期用JSONとして使います。
-
-曲尺、日本語の聞き取りやすさ、個人回答の反映、サビ、構成、生成時間、料金、修正のしやすさを記録してください。映像は当日生成せず、事前生成した短い素材を実際の曲展開に合わせて切り替える前提のタイムラインです。
-
-音楽生成時、設計書の内容はEleven Musicへ送信されます。実名・連絡先・第三者の個人情報や、実在アーティスト名・曲名・既存歌詞は入力しないでください。
+- OpenAIのプロフィール・設計書生成は Responses API、構造化出力、`store: false`、自動リトライなしを使う。
+- Realtime会話は、サーバーが短命なクライアントシークレットを発行する。恒久的なOpenAI APIキーをブラウザへ渡さない。
+- Eleven Musicは `music_v2_5`、90秒、タイムスタンプ付きで音源を生成する。
 
 ## 主な構成
 
-- `app/api/generate-brief`：OpenAIまたはモックから楽曲設計書を生成
-- `lib/prompts/creative-brief.ts`：構造化出力の指示とJSON Schema
-- `lib/providers/openai.ts` / `mock-brief.ts`：サーバー専用OpenAI処理と無料のモック
-- `app/api/generate-music`：Eleven Music APIへ90秒の詳細生成を依頼し、音声・歌詞・映像同期用JSONを一時的に返す
-- `app/result/page.tsx`：生成ボタン、ページ内プレーヤー、歌詞、プロンプト・タイムラインのコピー画面
-- `components/session.tsx`：一時セッションの復元・削除
-- `tests/domain.test.ts`：入力、タイムライン、生成データ、Originの検証
+| 場所 | 役割 |
+| --- | --- |
+| `app/page.tsx` | ラジオネーム入力・電話演出・デモ切替 |
+| `app/talk/page.tsx` | DJとの通話、楽曲ジョブ開始、完了後の再生導線 |
+| `app/result/page.tsx` | 音源再生、歌詞表示、再生終了後の導線 |
+| `app/api/realtime-session/route.ts` | Realtimeセッションのサーバー側準備 |
+| `app/api/music-jobs/` | 楽曲ジョブの開始、状態取得、音源取得、再試行 |
+| `lib/prompts/` | DJ会話、情報抽出、プロフィール、楽曲設計のプロンプト |
+| `lib/music-jobs.ts` | OpenAI → Eleven Music の順次ジョブ処理 |
+| `docs/radio-dj-todo.md` | 試作の確認済み事項・未確認事項 |
+
+OpenAIは歌詞本文を出力せず、会話を楽曲プロフィールとEleven Music用の制作指示書へ整理します。歌詞・歌唱・伴奏はEleven Musicが作ります。OpenAIの6区間タイムラインは映像演出の事前目安であり、生成後はEleven Musicが返す実際の歌詞・タイムスタンプを映像同期データとして扱います。
+
+音楽生成時、設計書の内容はEleven Musicへ送信されます。実名・連絡先・第三者の個人情報や、実在アーティスト名・曲名・既存歌詞は入力しないでください。
+
+## 共同開発時の注意
+
+- `main` には直接コミットしない。作業は `feature/...` または `experiment/...` ブランチで行う。
+- `.env.local`、`.tcs-runtime/`、`.next/`、`node_modules/` はコミットしない。
+- `.env.example` の変数名だけを共有し、値は各自のローカル環境で設定する。
+- 画像・動画素材は通常Gitで管理されている。大きな素材を追加する前に、容量とライセンスを確認する。
 
 ## 検証
 

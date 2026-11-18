@@ -64,7 +64,7 @@ function MusicVideo() {
     <footer className="mv-controls">
       <button className="mv-play" onClick={toggle} aria-label={playing ? "一時停止" : "再生"}>{playing ? "Ⅱ" : "▶"}</button>
       <div className="mv-progress"><input aria-label="再生位置" type="range" min="0" max={duration} step="0.1" value={currentTime} onChange={(event) => { const time = Number(event.target.value); if (audio.current) audio.current.currentTime = time; setCurrentTime(time); }} /><span>残り {Math.floor(remaining / 60)}:{String(Math.floor(remaining % 60)).padStart(2, "0")}</span></div>
-      <button className="mv-end" onClick={finish}>放送を終える</button>
+      <button className="mv-end" onClick={finish}>最初に戻る</button>
     </footer>
     <audio ref={audio} src={source.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 90)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => { setHasStarted(true); setPlaying(true); }} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrentTime(duration); setEnded(true); }} onError={() => setAudioError("音源を届けられませんでした。もう一度、放送をつなぎ直してください。")} />
     {audioError && <p className="mv-error" role="alert">{audioError}<button onClick={retryAudio}>もう一度つなぐ</button></p>}

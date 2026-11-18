@@ -31,8 +31,8 @@ export async function POST(request: Request) {
       : extracted;
     const next = nextQuestionId(answers);
     const fallbackReply = next
-      ? `${input.style === "male_cheer_squad" ? "よし、受け取った！" : "教えてくれてありがとう！"} 次に、${questions.find((question) => question.id === next)?.label}`
-      : `${input.style === "male_cheer_squad" ? "いい話だ！ その気持ちも曲に込めよう。" : "素敵！ その気持ちも応援歌のヒントにするね。"}`;
+      ? `うんうん、ありがとう。次に、${questions.find((question) => question.id === next)?.label}`
+      : "お話、しっかり受け取りました。あなたのための一曲を準備しますね。";
     return Response.json({ reply: answers === extracted ? result.reply : fallbackReply, answers, complete: isComplete(answers), nextQuestionId: next, mode: mock ? "mock" : "live" }, { headers: privateHeaders });
   } catch {
     return Response.json({ error: "会話を続けられませんでした。もう一度お試しください。" }, { status: 502, headers: privateHeaders });

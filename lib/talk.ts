@@ -14,7 +14,13 @@ export function mergeTalkAnswers(current: Answers, proposed: Partial<Answers>): 
 }
 
 export function nextQuestionId(answers: Answers): keyof Answers | null {
-  return requiredAnswerIds.find((id) => !answers[id].trim()) || null;
+  const missing = requiredAnswerIds.find((id) => !answers[id].trim());
+  if (missing) return missing;
+  if (!isSpecificAnswer(answers.currentEffort, 1)) return "currentEffort";
+  if (!isSpecificAnswer(answers.futureGoal, 4)) return "futureGoal";
+  if (!isSpecificAnswer(answers.encouragementTarget, 3)) return "encouragementTarget";
+  if (!isSupportedMood(answers.musicPreference)) return "musicPreference";
+  return null;
 }
 
 export function isComplete(answers: Answers) {
@@ -31,4 +37,13 @@ export function fillExpectedAnswer(answers: Answers, message: string): Answers {
 
 export function emptyTalkAnswers() {
   return { ...emptyAnswers };
+}
+
+const vagueAnswer = /^(特にない|ない|わからない|分からない|おまかせ|任せます|なんでも|特になし)$/;
+function isSpecificAnswer(value: string, minLength: number) {
+  const text = value.trim();
+  return text.length >= minLength && !vagueAnswer.test(text);
+}
+function isSupportedMood(value: string) {
+  return /(元気|しっとり|かっこいい|カッコいい|かっこよい|カッコよい)/.test(value.trim());
 }

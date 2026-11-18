@@ -10,7 +10,10 @@ export function Guard({ level, children }: { level: "consent" | "character" | "t
   if (ready) {
     if (!data.consent) destination = "/";
     else if (["talk", "answers", "result"].includes(level) && !data.style) destination = "/character";
-    else if (["answers", "result"].includes(level) && !data.profile) destination = "/talk";
+    // A completed music job already carries the profile together with the result.
+    // Requiring a separately rendered `profile` here can race with client navigation
+    // just after the job becomes ready, and sends a listener back to the call screen.
+    else if (level === "answers" && !data.profile) destination = "/talk";
     else if (level === "result" && !data.result) destination = "/generating";
   }
   useEffect(() => { if (destination) router.replace(destination); }, [destination, router]);
