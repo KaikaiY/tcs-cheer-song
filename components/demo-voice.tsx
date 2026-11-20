@@ -20,7 +20,7 @@ export function DemoVoice({ autoStart = false, characterName, nickname, onComple
     setState("talking");
     const line = characterName
       ? `${characterName}です。あなたへの応援歌を準備しています。`
-      : `こんにちは、${nickname ? `${nickname}さん` : "リスナーさん"}！こちら${radioStation}「${radioShow}」、${radioDj}だよ。スタジオへようこそ！ 君のお話から、君だけの応援歌を一曲贈るよ。`;
+      : `こんにちは、${nickname ? `${nickname}さん` : "リスナーさん"}！こちら${radioStation}「${radioShow}」、${radioDj}だよ。スタジオへようこそ！ 君の話をもとに、君だけの一曲をつくる番組だよ。`;
     onLiveTranscript("assistant", line, false);
     timer.current = window.setTimeout(() => { onLiveTranscript("assistant", line, true); onTranscript("assistant", line); setState("done"); onComplete?.(); }, 1100);
   }

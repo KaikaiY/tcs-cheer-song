@@ -59,7 +59,7 @@ async function run(job: InternalJob, input: JobInput) {
       version: "v1",
       summary: material.topic,
       personalMotifs: material.scene.match(/[^。！？]{1,100}[。！？]?/gu)?.map((part) => part.slice(0, 100).trim()).filter(Boolean).slice(0, 4) ?? [],
-      musicalHints: [],
+      musicalHints: material.musicPreference && material.musicPreference !== "おまかせ" ? [material.musicPreference] : [],
     } : mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
   } catch { failJob(job, "会話内容を楽曲プロフィールに整理できませんでした。会話を続けてから、もう一度お試しください。"); return; }
   job.profile = profile;
@@ -93,7 +93,7 @@ async function finishMusic(job: InternalJob) {
     const sections = lyrics.map((item, index) => { const endMs = startMs + item.durationMs; const section = { id: `part-${index + 1}`, name: item.name, startMs, endMs, energy: "medium" }; startMs = endMs; return section; });
     job.audio = new Uint8Array(output.audio);
     await saveMusicFile(job.id, job.audio);
-    job.title = output.json.songMetadata.title || "AIオリジナル応援ソング";
+    job.title = output.json.songMetadata.title || "あなたのための一曲";
     job.lyrics = JSON.stringify(lyrics);
     job.visualSync = JSON.stringify({ version: "v1", durationMs: startMs || 90_000, sections });
     job.wordTimestamps = JSON.stringify((output.json as typeof output.json & { wordsTimestamps?: unknown[] }).wordsTimestamps || []);

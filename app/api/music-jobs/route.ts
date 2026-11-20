@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!isRecord(body) || typeof body.id !== "string" || !/^[a-zA-Z0-9-]{8,80}$/.test(body.id) || !isStyle(body.style)) throw new Error();
     if ("material" in body) {
       const material = parseSongMaterial(body.material);
-      if (!material) throw new Error();
+      if (!material?.musicPreference) throw new Error();
       const job = startMusicJob({ id: body.id, style: body.style, answers: { ...emptyAnswers }, conversation: [], material });
       return Response.json({ id: job.id, status: job.status }, { headers: privateHeaders });
     }

@@ -4,7 +4,7 @@ import { answerErrors, parseCreativeBrief, parseSongProfile, parseSubmission, re
 import { mockCreativeBrief } from "../lib/providers/mock-brief.ts";
 import { addMandatorySpec } from "../lib/prompt-format.ts";
 import { readBody, safeOrigin } from "../lib/api.ts";
-import { isSongWithdrawal, parseSongMaterial } from "../lib/song-material.ts";
+import { hasMusicDirection, isSongWithdrawal, parseSongMaterial } from "../lib/song-material.ts";
 import { formatRadioCaption } from "../lib/radio-brand.ts";
 import { isMeaningfulRadioTurn, isRadioName } from "../lib/radio-name.ts";
 import { fillExpectedAnswer, mergeTalkAnswers, nextQuestionId } from "../lib/talk.ts";
@@ -29,6 +29,10 @@ test("radio input accepts kana names and skips filler-only transcripts", () => {
 test("song material requires both a topic and a scene and recognizes explicit withdrawal", () => {
   assert.deepEqual(parseSongMaterial({ topic: " 試験に挑戦したい ", scene: "寝る前に一問解いた" }), { topic: "試験に挑戦したい", scene: "寝る前に一問解いた" });
   assert.equal(parseSongMaterial({ topic: "試験に挑戦したい", scene: "" }), undefined);
+  const material = { topic: "文化祭の思い出", scene: "駅まで雨の中を走った" };
+  assert.deepEqual(parseSongMaterial({ ...material, musicPreference: " おまかせ " }), { ...material, musicPreference: "おまかせ" });
+  assert.deepEqual(parseSongMaterial({ ...material, musicPreference: "やわらかい歌声" }), { ...material, musicPreference: "やわらかい歌声" });
+  assert.equal(parseSongMaterial({ ...material, musicPreference: "" }), undefined);
   for (const text of ["その話は歌に入れないで", "さっきの話はなしで", "曲づくりはやめて", "それは入れないで", "この話はオフレコで"]) assert.equal(isSongWithdrawal(text), true);
   assert.equal(isSongWithdrawal("友達にアプリを見せたいです"), false);
 });
@@ -37,4 +41,10 @@ test("spoken station names use the on-screen spelling", () => {
   for (const name of ["ティーシーエスレディオ", "てぃーしーえす らじお", "TCS radio", "ＴＣＳ ＲＡＤＩＯ", "TCSラジオ"])
     assert.equal(formatRadioCaption(`こちら${name}です`), "こちらTCS RADIOです");
   assert.equal(formatRadioCaption("ラジオの話をしよう"), "ラジオの話をしよう");
+});
+
+test("song preference must contain a musical direction", () => {
+  assert.equal(hasMusicDirection("スピッツが好きです"), false);
+  assert.equal(hasMusicDirection("静かに始まって、サビで少し広がる感じがいい"), true);
+  assert.equal(hasMusicDirection("ピアノの音が好きです"), true);
 });

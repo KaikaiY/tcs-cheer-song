@@ -5,7 +5,7 @@ import { fillExpectedAnswer, isComplete, mergeTalkAnswers, nextQuestionId } from
 import { questions } from "@/lib/questions";
 import { isRecord, isStyle } from "@/lib/validation";
 import { mockTalk } from "@/lib/providers/mock-talk";
-import { openaiSongMaterial, openaiTalk } from "@/lib/providers/openai";
+import { openaiSongMaterial, openaiTalk, TalkResponseError } from "@/lib/providers/openai";
 import type { Answers, ConversationMessage } from "@/lib/types";
 
 function parseInput(value: unknown) {
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   if (!safeOrigin(request)) return Response.json({ error: "この操作は許可されていません。" }, { status: 403, headers: privateHeaders });
   let body: unknown;
   try { body = await readBody(request); } catch { return Response.json({ error: "入力内容を確認してください。" }, { status: 400, headers: privateHeaders }); }
+  const stage = isRecord(body) && Array.isArray(body.songConversation) ? "song_material" : "talk";
   try {
     const mock = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(20_000)]);
@@ -30,10 +31,10 @@ export async function POST(request: Request) {
         isRecord(item) && (item.role === "user" || item.role === "assistant") && typeof item.text === "string"
           ? [{ role: item.role, text: item.text.slice(0, 500) }]
           : []);
-      const material = !mock && conversation.at(-1)?.role === "user"
+      const selection = !mock && conversation.at(-1)?.role === "user"
         ? await openaiSongMaterial(conversation, signal)
-        : undefined;
-      return Response.json({ material: material ?? null }, { headers: privateHeaders });
+        : { material: null, waitingFor: "story" };
+      return Response.json(selection, { headers: privateHeaders });
     }
     let input;
     try { input = parseInput(body); } catch { return Response.json({ error: "入力内容を確認してください。" }, { status: 400, headers: privateHeaders }); }
@@ -50,7 +51,11 @@ export async function POST(request: Request) {
   } catch (error) {
     if (!request.signal.aborted) {
       console.warn("[api/talk] Conversation request failed", {
+        stage,
         type: error instanceof Error ? error.name : "UnknownError",
+        category: error instanceof TalkResponseError ? error.category : undefined,
+        responseStatus: error instanceof TalkResponseError ? error.responseStatus : undefined,
+        responseCode: error instanceof TalkResponseError ? error.responseCode : undefined,
         status: error instanceof OpenAI.APIError ? error.status : undefined,
       });
     }

@@ -10,7 +10,7 @@ import { isSongWithdrawal, parseSongMaterial, type SongMaterial } from "@/lib/so
 import { demoResult } from "@/lib/demo";
 import { saveGeneratedMusic } from "@/lib/music-runtime";
 import { isRecord } from "@/lib/validation";
-import type { MockScenario, Style } from "@/lib/types";
+import type { ConversationMessage, MockScenario, Style } from "@/lib/types";
 
 const mockDelays: Record<MockScenario, number> = { quick: 2300, wait30: 30_000, wait120: 120_000, fail: 2300, "retry-success": 2300, "audio-fail": 2300 };
 const mockLabels: Record<MockScenario, string> = { quick: "短時間で成功", wait30: "30秒待って成功", wait120: "120秒待って成功", fail: "失敗", "retry-success": "一度失敗して再試行", "audio-fail": "再生失敗" };
@@ -24,6 +24,7 @@ function TalkInterview() {
   const router = useRouter();
   const [summarizing, setSummarizing] = useState(false);
   const [materialCheck, setMaterialCheck] = useState("発言待ち");
+  const [materialFailed, setMaterialFailed] = useState(false);
   const [pollFailure, setPollFailure] = useState(false);
   const [introductionProgress, setIntroductionProgress] = useState<"requested" | "speaking" | "interrupted">();
   const introductionLabel = introductionProgress === "speaking" ? "DJが紹介中" : introductionProgress === "requested" ? "DJの発話開始待ち" : introductionProgress === "interrupted" ? "中断後の会話の区切り待ち" : "会話の区切り待ち";
@@ -214,7 +215,7 @@ function TalkInterview() {
   const openResult = useCallback(() => {
     if (!readyJob?.result || !preparedAudio || preparedAudio.id !== readyJob.id || abandonedJob.current === readyJob.id || transferredAudio.current) return;
     transferredAudio.current = preparedAudio.url;
-    saveGeneratedMusic({ audioUrl: preparedAudio.url, title: readyJob.title || (isDemo ? "TCS フルスロットル！" : "AIオリジナル応援ソング"), lyrics: readyJob.lyrics || null, visualSync: readyJob.visualSync || null, wordTimestamps: readyJob.wordTimestamps || null });
+    saveGeneratedMusic({ audioUrl: preparedAudio.url, title: readyJob.title || (isDemo ? "TCS フルスロットル！" : "あなたのための一曲"), lyrics: readyJob.lyrics || null, visualSync: readyJob.visualSync || null, wordTimestamps: readyJob.wordTimestamps || null });
     update({ profile: readyJob.profile, result: readyJob.result, musicJob: readyJob });
     router.replace("/result?play=1");
   }, [isDemo, preparedAudio, readyJob, router, update]);
@@ -252,7 +253,7 @@ function TalkInterview() {
     if (!data.songMaterial) return;
     jobStartLock.current = false;
     setJobConnectionLost(false);
-    void composeProfile(data.songMaterial);
+    void composeProfile({ ...data.songMaterial, musicPreference: data.songMaterial.musicPreference ?? "おまかせ" });
   }
 
   async function saveTranscript(role: "user" | "assistant", transcript: string) {
@@ -267,6 +268,7 @@ function TalkInterview() {
       selection.current?.abort();
       jobRequest.current?.abort();
       setMaterialCheck("題材を取り消しました");
+      setMaterialFailed(false);
       jobStartLock.current = false;
       setSummarizing(false);
       setJob(undefined);
@@ -276,28 +278,39 @@ function TalkInterview() {
       update({ musicJob: undefined, songMaterial: undefined, profile: undefined, result: undefined });
       return;
     }
+    await checkMaterial(conversation);
+  }
+
+  async function checkMaterial(conversation: ConversationMessage[]) {
     if (jobStartLock.current) return;
+    const lastUser = conversation.findLastIndex(({ role }) => role === "user");
+    if (lastUser < 0) return;
     selection.current?.abort();
     const controller = new AbortController();
     selection.current = controller;
     setMaterialCheck("本人の発言を判定中");
+    setMaterialFailed(false);
     try {
       const withdrawal = conversation.findLastIndex((message) => message.role === "user" && isSongWithdrawal(message.text));
       const response = await fetch("/api/talk", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ songConversation: conversation.slice(withdrawal + 1).slice(-10) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22_000)]),
+        body: JSON.stringify({ songConversation: conversation.slice(withdrawal + 1, lastUser + 1).slice(-10) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22_000)]),
       });
       const value: unknown = await response.json();
       if (controller.signal.aborted || jobStartLock.current) return;
       if (!response.ok || !isRecord(value) || !("material" in value)) {
         setMaterialCheck(`題材判定の応答エラー（HTTP ${response.status}）`);
+        setMaterialFailed(true);
         return;
       }
       const material = parseSongMaterial(value.material);
-      setMaterialCheck(material ? "題材が揃いました" : "題材または具体的な場面を聞き取り中");
-      if (material) void composeProfile(material);
+      setMaterialCheck(material?.musicPreference ? "題材と曲調が揃いました" : value.waitingFor === "music" ? "曲調を聞き取り中" : "題材または具体的な場面を聞き取り中");
+      if (material?.musicPreference) void composeProfile(material);
     } catch {
-      if (!controller.signal.aborted) setMaterialCheck("題材判定の通信エラーまたはタイムアウト");
+      if (!controller.signal.aborted) {
+        setMaterialCheck("題材判定の通信エラーまたはタイムアウト");
+        setMaterialFailed(true);
+      }
     }
   }
 
@@ -335,6 +348,10 @@ function TalkInterview() {
         </div>
         {!job && !nickname && <label className="nickname-check">呼び名の聞き取り確認・修正<input value={data.answers.nickname} onChange={(event) => correctNickname(event.target.value)} placeholder="例：かいかい" maxLength={24} /></label>}
         {isDemo && !job && <label className="mock-control">モック検証用<select value={data.mockScenario || "quick"} onChange={(event) => update({ mockScenario: event.target.value as MockScenario })}>{(Object.keys(mockLabels) as MockScenario[]).map((scenario) => <option key={scenario} value={scenario}>{mockLabels[scenario]}</option>)}</select></label>}
+        {materialFailed && !job && <p className="inline-error" role="alert">
+          曲の題材を読み取れませんでした。
+          <button className="vn-finish" onClick={() => void checkMaterial(conversationRef.current)}>もう一度つなぐ</button>
+        </p>}
         {error && <p className="inline-error" role="alert">{error}
           {readyJob && !playable && <button className="vn-finish" onClick={() => setAudioAttempt((value) => value + 1)}>もう一度読み込む</button>}
           {!job && data.songMaterial && <button className="vn-finish" onClick={restartLostJob}>もう一度つなぐ</button>}

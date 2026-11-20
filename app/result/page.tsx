@@ -27,7 +27,7 @@ function MusicVideo() {
   const [audioError, setAudioError] = useState("");
   const saved = readGeneratedMusic();
   const job = data.musicJob;
-  const generated: (MusicSource & { wordTimestamps: string | null }) | null = saved ? { ...saved, wordTimestamps: saved.wordTimestamps } : (job?.status === "ready" && job.result ? { audioUrl: `/api/music-jobs/${job.id}/audio`, title: job.title || "AIオリジナル応援ソング", lyrics: job.lyrics || null, wordTimestamps: job.wordTimestamps || null } : null);
+  const generated: (MusicSource & { wordTimestamps: string | null }) | null = saved ? { ...saved, wordTimestamps: saved.wordTimestamps } : (job?.status === "ready" && job.result ? { audioUrl: `/api/music-jobs/${job.id}/audio`, title: job.title || "あなたのための一曲", lyrics: job.lyrics || null, wordTimestamps: job.wordTimestamps || null } : null);
   const isDemo = data.mode === "demo";
   const demoAudioUrl = data.mockScenario === "audio-fail" ? "/audio/radio-unavailable.wav" : data.style === "female_idol" ? "/audio/idol-demo.wav" : "/audio/cheer-demo.wav";
   const source: (MusicSource & { wordTimestamps: string | null }) | null = isDemo ? { audioUrl: saved?.audioUrl || demoAudioUrl, title: data.style === "female_idol" ? "きらめくエール" : "TCS フルスロットル！", lyrics: JSON.stringify(demoLyrics), wordTimestamps: null } : generated;
@@ -62,7 +62,7 @@ function MusicVideo() {
     <main className="mv-center">
       <div className={`mv-title-card${hasStarted ? " is-hidden" : ""}`} aria-hidden={hasStarted}><p>{radioStation} · NOW PLAYING</p><h1>{source.title}</h1><span>{radioDj}から、あなたへの一曲です</span></div>
       <div className="mv-caption" aria-live="polite"><span>{activeCue?.section || "LYRICS"}{activeCue?.synced ? " · SYNCED" : " · DEMO TIMING"}</span><strong>{activeLine}</strong></div>
-      {ended && <p className="radio-signoff" role="status">以上、あなたのための一曲でした。今日の一歩を、TCS RADIOは応援しています。</p>}
+      {ended && <p className="radio-signoff" role="status">以上、あなたのための一曲でした。お話を聞かせてくれて、ありがとう。</p>}
     </main>
     <footer className="mv-controls">
       <button className="mv-play" onClick={toggle} aria-label={playing ? "一時停止" : "再生"}>{playing ? "Ⅱ" : "▶"}</button>
