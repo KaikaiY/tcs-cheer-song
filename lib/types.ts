@@ -1,10 +1,11 @@
+import type { SongMaterial } from "./song-material";
+
 export type Style = "male_cheer_squad" | "female_idol";
 export type RunMode = "demo" | "live";
 export type MockScenario = "quick" | "wait30" | "wait120" | "fail" | "retry-success" | "audio-fail";
 
 export type Answers = {
   nickname: string;
-  currentEffort: string;
   futureGoal: string;
   encouragementTarget: string;
   strength: string;
@@ -69,6 +70,7 @@ export type Session = {
   style: Style | "";
   questionIndex: number;
   conversation: ConversationMessage[];
+  songMaterial?: SongMaterial;
   profile?: SongProfile;
   result?: Result;
   musicJob?: MusicJob;

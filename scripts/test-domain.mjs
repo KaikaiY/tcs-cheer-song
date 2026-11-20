@@ -11,6 +11,8 @@ const files = [
   "lib/api.ts",
   "lib/types.ts",
   "lib/questions.ts",
+  "lib/radio-name.ts",
+  "lib/song-material.ts",
   "lib/talk.ts",
   "lib/providers/mock-brief.ts",
   "lib/providers/mock-profile.ts",

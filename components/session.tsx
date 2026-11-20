@@ -7,8 +7,9 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { emptyAnswers } from "@/lib/questions";
+import { emptyAnswers, questions } from "@/lib/questions";
 import { isRecord, isStyle, parseCreativeBrief, parseSongProfile } from "@/lib/validation";
+import { parseSongMaterial } from "@/lib/song-material";
 import type { MockScenario, Session } from "@/lib/types";
 const KEY = "tcs-cheer-v1";
 const fresh = (): Session => ({
@@ -57,9 +58,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               questionIndex:
                 typeof value.questionIndex === "number" &&
                 value.questionIndex >= 0 &&
-                value.questionIndex < 6
+                value.questionIndex < questions.length
                   ? value.questionIndex
                   : 0,
+              songMaterial: parseSongMaterial(value.songMaterial),
               conversation: Array.isArray(value.conversation)
                 ? value.conversation.flatMap((message) => isRecord(message) && (message.role === "user" || message.role === "assistant") && typeof message.text === "string" && message.text.length <= 500 ? [{ role: message.role, text: message.text }] : [])
                 : [],

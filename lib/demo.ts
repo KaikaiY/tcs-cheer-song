@@ -4,7 +4,6 @@ import type { Answers, ConversationMessage, SongProfile, Style } from "./types";
 
 const answers: Answers = {
   nickname: "かいかい",
-  currentEffort: "TCSフェスに向けた応援歌システムの開発",
   futureGoal: "会場のみんなが前を向けるフェスを成功させること",
   encouragementTarget: "自信を持って、最後まで開発を進めること",
   strength: "小さな改善をコツコツ続けられること",

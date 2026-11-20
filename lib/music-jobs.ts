@@ -6,35 +6,61 @@ import { mockSongProfile } from "./providers/mock-profile";
 import { openaiCreativeBrief, openaiSongProfile } from "./providers/openai";
 import { parseCreativeBrief, parseSongProfile } from "./validation";
 import { readMusicFile, saveMusicFile } from "./music-storage";
+import type { SongMaterial } from "./song-material";
 import type { Answers, ConversationMessage, MusicJob, Style } from "./types";
 
+type JobInput = { style: Style; answers: Answers; conversation: ConversationMessage[]; material?: SongMaterial };
 type InternalJob = MusicJob & { audio?: Uint8Array };
-const jobs = new Map<string, InternalJob>();
+const runtime = globalThis as typeof globalThis & {
+  cheerSongJobs?: Map<string, { job: InternalJob; input: JobInput }>;
+};
+const jobs = runtime.cheerSongJobs ??= new Map();
 
 function lyricsFromPlan(plan: unknown) {
   if (!plan || typeof plan !== "object" || !Array.isArray((plan as { chunks?: unknown }).chunks)) return [];
   return (plan as { chunks: Array<{ text?: unknown; durationMs?: unknown }> }).chunks.flatMap((chunk, index) => typeof chunk.text === "string" && typeof chunk.durationMs === "number" ? [{ name: `パート ${index + 1}`, durationMs: chunk.durationMs, lines: chunk.text.split(/\r?\n/).filter(Boolean) }] : []);
 }
 
-export function getMusicJob(id: string) { return jobs.get(id); }
-export async function getMusicAudio(id: string) { return jobs.get(id)?.audio || await readMusicFile(id); }
-export function retryMusicJob(id: string) { const job = jobs.get(id); if (!job || !job.result || job.status !== "failed") return undefined; job.status = "generating"; job.error = undefined; void finishMusic(job).catch(() => { job.status = "failed"; job.error = "楽曲の生成に失敗しました。音楽生成だけ再試行できます。"; }); return job; }
+export function getMusicJob(id: string) { return jobs.get(id)?.job; }
+export async function getMusicAudio(id: string) { return getMusicJob(id)?.audio || await readMusicFile(id); }
 
-export function startMusicJob(input: { id: string; style: Style; answers: Answers; conversation: ConversationMessage[] }) {
-  const existing = jobs.get(input.id);
+export function retryMusicJob(id: string) {
+  const entry = jobs.get(id);
+  if (!entry || entry.job.status !== "failed") return entry?.job;
+
+  const { job, input } = entry;
+  job.error = undefined;
+  if (job.result) {
+    job.status = "generating";
+    void generateMusic(job);
+  } else {
+    job.status = "preparing";
+    void run(job, input);
+  }
+  return job;
+}
+
+export function startMusicJob({ id, ...input }: JobInput & { id: string }) {
+  const existing = getMusicJob(id);
   if (existing) return existing;
-  const job: InternalJob = { id: input.id, status: "preparing" };
-  jobs.set(input.id, job);
+  const job: InternalJob = { id, status: "preparing" };
+  jobs.set(id, { job, input });
   void run(job, input);
   return job;
 }
 
-async function run(job: InternalJob, input: { style: Style; answers: Answers; conversation: ConversationMessage[] }) {
+async function run(job: InternalJob, input: JobInput) {
   const signal = AbortSignal.timeout(120_000);
   const mock = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
   let profile;
   try {
-    profile = parseSongProfile(mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
+    const material = input.material;
+    profile = parseSongProfile(material ? {
+      version: "v1",
+      summary: material.topic,
+      personalMotifs: material.scene.match(/[^。！？]{1,100}[。！？]?/gu)?.map((part) => part.slice(0, 100).trim()).filter(Boolean).slice(0, 4) ?? [],
+      musicalHints: [],
+    } : mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
   } catch { failJob(job, "会話内容を楽曲プロフィールに整理できませんでした。会話を続けてから、もう一度お試しください。"); return; }
   job.profile = profile;
   try {
@@ -43,6 +69,10 @@ async function run(job: InternalJob, input: { style: Style; answers: Answers; co
     job.result = { brief, briefMode: mock ? "mock" : "live" };
   } catch { failJob(job, "楽曲の設計書を作成できませんでした。時間をおいて、音楽生成をもう一度お試しください。"); return; }
   job.status = "generating";
+  await generateMusic(job);
+}
+
+async function generateMusic(job: InternalJob) {
   try { await finishMusic(job); } catch (error) {
     const detail = error instanceof Error && error.message.includes("Eleven Music") ? error.message : "Eleven Musicで楽曲を作成できませんでした。音楽生成だけ再試行できます。";
     failJob(job, detail);

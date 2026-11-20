@@ -4,56 +4,71 @@ import { useRouter } from "next/navigation";
 import { Stage } from "@/components/shell";
 import { useSession } from "@/components/session";
 import { emptyAnswers } from "@/lib/questions";
+import { connectRealtimeCall, handOffRealtimeCall } from "@/lib/realtime-call";
+import { isRadioName, radioNamePattern } from "@/lib/radio-name";
 import type { RunMode } from "@/lib/types";
-
-type CallState = "entry" | "dialing" | "incoming";
 
 export default function Home() {
   const router = useRouter();
-  const { reset, update } = useSession();
+  const { ready, reset, update } = useSession();
   const [demo, setDemo] = useState(true);
   const [nickname, setNickname] = useState("");
-  const [callState, setCallState] = useState<CallState>("entry");
-  const audioContext = useRef<AudioContext | null>(null);
-  const ringTimer = useRef<number | null>(null);
-  const dialTimer = useRef<number | null>(null);
+  const [dialing, setDialing] = useState(false);
+  const [error, setError] = useState("");
+  const attempt = useRef<AbortController | null>(null);
   const mode: RunMode = demo ? "demo" : "live";
+  const validNickname = isRadioName(nickname);
 
-  function stopRingtone() { if (ringTimer.current) window.clearInterval(ringTimer.current); ringTimer.current = null; }
-  function tone(frequency: number, duration: number, gain = 0.045) {
-    try {
-      const context = audioContext.current ?? new AudioContext(); audioContext.current = context; void context.resume();
-      const oscillator = context.createOscillator(); const volume = context.createGain();
-      oscillator.frequency.value = frequency; volume.gain.setValueAtTime(gain, context.currentTime); volume.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
-      oscillator.connect(volume).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + duration);
-    } catch { /* The call flow stays usable when a browser blocks sound. */ }
-  }
-  function ring() { tone(440, 0.16); window.setTimeout(() => tone(480, 0.16), 190); }
-  function dial() {
-    if (!nickname.trim()) return;
-    setCallState("dialing"); tone(350, 0.12, 0.03);
-    dialTimer.current = window.setTimeout(() => { setCallState("incoming"); ring(); ringTimer.current = window.setInterval(ring, 1500); }, 900);
-  }
-  function answer() {
-    stopRingtone(); if (dialTimer.current) window.clearTimeout(dialTimer.current);
-    // Keep the privacy guidance unobtrusive on the entry screen; do not interrupt the call with a separate consent page.
-    reset();
-    update({
-      mode,
-      consent: true,
-      questionIndex: 0,
-      style: "male_cheer_squad",
-      conversation: [],
-      result: undefined,
-      answers: { ...emptyAnswers, nickname: nickname.trim() },
+  async function dial() {
+    if (!validNickname || attempt.current) return;
+    const controller = new AbortController();
+    attempt.current = controller;
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(25_000)]);
+    setDialing(true);
+    setError("");
+    // "landline phone (90's)" by Anonio82, CC0. https://freesound.org/s/716988/
+    const ringtone = new Audio("/sounds/ringtone.mp3");
+    ringtone.loop = true;
+    ringtone.volume = 0.35;
+    void ringtone.play().catch(() => { /* The call can continue without sound. */ });
+    signal.addEventListener("abort", () => ringtone.pause(), { once: true });
+    const ringing = new Promise<void>((resolve) => {
+      const timer = window.setTimeout(resolve, 6_000);
+      signal.addEventListener("abort", () => { window.clearTimeout(timer); resolve(); }, { once: true });
     });
-    router.push("/talk");
-  }
-  useEffect(() => () => { stopRingtone(); if (dialTimer.current) window.clearTimeout(dialTimer.current); void audioContext.current?.close(); }, []);
 
-  return <Stage minimal><section className={`radio-home radio-call ${callState}`}><div className="radio-home-signal" aria-hidden="true" /><div className="dj-bird-placeholder radio-home-bird" aria-label="仮の鳥型DJシルエット"><i /><b /><em /></div><div className="radio-home-content"><p>TCS RADIO</p>
-    {callState === "entry" && <><h1>DJに、<br />電話をかけよう。</h1><span>LIVE CALL · 90 SECOND ANTHEM</span><label className="radio-name-entry"><b>ラジオネーム</b><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="呼ばれたい名前を入力" maxLength={24} autoComplete="nickname" autoFocus /><small>本名でなくて大丈夫です</small></label><label className="mode-toggle"><span>デモモード</span><input type="checkbox" checked={demo} onChange={(event) => setDemo(event.target.checked)} /><i aria-hidden="true" /></label><button className="button radio-start" disabled={!nickname.trim()} onClick={dial}>TCS RADIOへ電話をかける　→</button></>}
-    {callState === "dialing" && <div className="call-status" role="status"><span className="call-pulse" aria-hidden="true" /><h1>呼び出し中…</h1><p>TCS RADIOにつないでいます</p></div>}
-    {callState === "incoming" && <div className="call-status incoming" role="status"><span className="call-pulse" aria-hidden="true" /><p>TCS RADIO から着信中</p><h1>{nickname}さん、<br />電話がつながりました。</h1><button className="button radio-start" onClick={answer}>電話に出る　→</button><small>音が聞こえない場合も、そのまま電話に出られます</small></div>}
+    let call;
+    try {
+      if (mode === "live") call = await connectRealtimeCall({ style: "male_cheer_squad", phase: "interview", nickname }, signal);
+      await ringing;
+      signal.throwIfAborted();
+      if (call && call.channel.readyState !== "open") throw new Error("通話が切れました。");
+      reset();
+      update({ mode, consent: true, style: "male_cheer_squad", answers: { ...emptyAnswers, nickname } });
+      if (call) handOffRealtimeCall(call);
+      setNickname("");
+      router.push("/talk");
+    } catch {
+      call?.close();
+      if (!controller.signal.aborted) setError("つながりませんでした。マイクの許可を確認して、もう一度かけてください。");
+    } finally {
+      ringtone.pause();
+      if (attempt.current === controller) {
+        attempt.current = null;
+        setDialing(false);
+      }
+      controller.abort();
+    }
+  }
+
+  useEffect(() => () => {
+    attempt.current?.abort();
+    attempt.current = null;
+  }, []);
+
+  return <Stage minimal><section className={`radio-home radio-call ${dialing ? "dialing" : "entry"}`}><div className="radio-home-signal" aria-hidden="true" /><div className="dj-bird-placeholder radio-home-bird" aria-label="仮の鳥型DJシルエット"><i /><b /><em /></div><div className="radio-home-content"><p>TCS RADIO</p>
+    {!dialing && <><h1>DJに、<br />電話をかけよう。</h1><label className="radio-name-entry"><b>ラジオネーム</b><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="呼ばれたい名前を入力" maxLength={24} disabled={!ready} pattern={radioNamePattern} aria-invalid={nickname !== "" && !validNickname} autoComplete="nickname" autoFocus /><small>ひらがな・カタカナで入力してください</small></label><label className="mode-toggle"><span>デモモード</span><input type="checkbox" disabled={!ready} checked={demo} onChange={(event) => setDemo(event.target.checked)} /><i aria-hidden="true" /></label><button className="button radio-start" disabled={!ready || !validNickname} onClick={() => void dial()}>TCS RADIOへ電話をかける　→</button></>}
+    {dialing && <div className="call-status" role="status"><span className="call-pulse" aria-hidden="true" /><h1>呼び出し中…</h1><p>TCS RADIOにつないでいます</p></div>}
+    {error && <p className="inline-error" role="alert">{error}</p>}
   </div></section></Stage>;
 }

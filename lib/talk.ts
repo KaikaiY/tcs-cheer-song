@@ -16,7 +16,6 @@ export function mergeTalkAnswers(current: Answers, proposed: Partial<Answers>): 
 export function nextQuestionId(answers: Answers): keyof Answers | null {
   const missing = requiredAnswerIds.find((id) => !answers[id].trim());
   if (missing) return missing;
-  if (!isSpecificAnswer(answers.currentEffort, 1)) return "currentEffort";
   if (!isSpecificAnswer(answers.futureGoal, 4)) return "futureGoal";
   if (!isSpecificAnswer(answers.encouragementTarget, 3)) return "encouragementTarget";
   if (!isSupportedMood(answers.musicPreference)) return "musicPreference";

@@ -1,6 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { Guard, Stage } from "@/components/shell";
 import { useSession } from "@/components/session";
 import { clearGeneratedMusic, readGeneratedMusic } from "@/lib/music-runtime";
@@ -18,7 +17,6 @@ function parseLyrics(value: string | null): LyricSection[] { if (!value) return 
 
 function MusicVideo() {
   const { data, reset } = useSession();
-  const router = useRouter();
   const audio = useRef<HTMLAudioElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(90);
@@ -31,8 +29,12 @@ function MusicVideo() {
   const generated: (MusicSource & { wordTimestamps: string | null }) | null = saved ? { ...saved, wordTimestamps: saved.wordTimestamps } : (job?.status === "ready" && job.result ? { audioUrl: `/api/music-jobs/${job.id}/audio`, title: job.title || "AIオリジナル応援ソング", lyrics: job.lyrics || null, wordTimestamps: job.wordTimestamps || null } : null);
   const isDemo = data.mode === "demo";
   const demoAudioUrl = data.mockScenario === "audio-fail" ? "/audio/radio-unavailable.wav" : data.style === "female_idol" ? "/audio/idol-demo.wav" : "/audio/cheer-demo.wav";
-  const source: (MusicSource & { wordTimestamps: string | null }) | null = generated || (isDemo ? { audioUrl: demoAudioUrl, title: data.style === "female_idol" ? "きらめくエール" : "TCS フルスロットル！", lyrics: JSON.stringify(demoLyrics), wordTimestamps: null } : null);
+  const source: (MusicSource & { wordTimestamps: string | null }) | null = isDemo ? { audioUrl: saved?.audioUrl || demoAudioUrl, title: data.style === "female_idol" ? "きらめくエール" : "TCS フルスロットル！", lyrics: JSON.stringify(demoLyrics), wordTimestamps: null } : generated;
   const result = data.result || job?.result;
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("play") !== "1") return;
+    void audio.current?.play().catch(() => { /* The play button remains available. */ });
+  }, [source?.audioUrl]);
   if (!result || !source) return null;
   const style = result.brief.style;
   const sections = parseLyrics(source.lyrics);
@@ -46,7 +48,7 @@ function MusicVideo() {
       audio.current.play().then(() => { setEnded(false); }).catch(() => setAudioError("音源を届けられませんでした。もう一度、放送をつなぎ直してください。"));
     } else audio.current.pause();
   }
-  function finish() { clearGeneratedMusic(); reset(); router.replace("/"); }
+  function finish() { clearGeneratedMusic(); reset(); window.location.replace("/"); }
   function retryAudio() { setAudioError(""); audio.current?.load(); }
   const remaining = Math.max(0, duration - currentTime);
 
