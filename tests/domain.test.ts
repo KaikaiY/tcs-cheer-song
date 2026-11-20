@@ -5,6 +5,7 @@ import { mockCreativeBrief } from "../lib/providers/mock-brief.ts";
 import { addMandatorySpec } from "../lib/prompt-format.ts";
 import { readBody, safeOrigin } from "../lib/api.ts";
 import { isSongWithdrawal, parseSongMaterial } from "../lib/song-material.ts";
+import { formatRadioCaption } from "../lib/radio-brand.ts";
 import { isMeaningfulRadioTurn, isRadioName } from "../lib/radio-name.ts";
 import { fillExpectedAnswer, mergeTalkAnswers, nextQuestionId } from "../lib/talk.ts";
 
@@ -30,4 +31,10 @@ test("song material requires both a topic and a scene and recognizes explicit wi
   assert.equal(parseSongMaterial({ topic: "試験に挑戦したい", scene: "" }), undefined);
   for (const text of ["その話は歌に入れないで", "さっきの話はなしで", "曲づくりはやめて", "それは入れないで", "この話はオフレコで"]) assert.equal(isSongWithdrawal(text), true);
   assert.equal(isSongWithdrawal("友達にアプリを見せたいです"), false);
+});
+
+test("spoken station names use the on-screen spelling", () => {
+  for (const name of ["ティーシーエスレディオ", "てぃーしーえす らじお", "TCS radio", "ＴＣＳ ＲＡＤＩＯ", "TCSラジオ"])
+    assert.equal(formatRadioCaption(`こちら${name}です`), "こちらTCS RADIOです");
+  assert.equal(formatRadioCaption("ラジオの話をしよう"), "ラジオの話をしよう");
 });

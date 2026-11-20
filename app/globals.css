@@ -45,3 +45,5 @@
 .radio-dj-background{background-image:linear-gradient(#0608128c,#0608128c),url("/backgrounds/radio-dj-still-3d.png");background-size:cover;background-position:center}
 .radio-booth-backdrop{background-image:linear-gradient(#06081276,#06081276),url("/backgrounds/radio-dj-still-3d.png");background-size:cover;background-position:center}
 .radio-home-bird,.radio-dj .dj-bird-placeholder,.dj-bird-result{display:none}
+
+.radio-diagnostics{margin-top:10px;color:#ffffffbf;font-size:12px}.radio-diagnostics summary{cursor:pointer}.radio-diagnostics ul{margin:6px 0;padding-left:18px}

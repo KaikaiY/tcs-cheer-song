@@ -12,6 +12,7 @@ const files = [
   "lib/types.ts",
   "lib/questions.ts",
   "lib/radio-name.ts",
+  "lib/radio-brand.ts",
   "lib/song-material.ts",
   "lib/talk.ts",
   "lib/providers/mock-brief.ts",

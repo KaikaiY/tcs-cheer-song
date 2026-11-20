@@ -1,4 +1,5 @@
 "use client";
+import { radioDj, radioShow, radioStation } from "@/lib/radio-brand";
 import { useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -19,7 +20,7 @@ export function DemoVoice({ autoStart = false, characterName, nickname, onComple
     setState("talking");
     const line = characterName
       ? `${characterName}です。あなたへの応援歌を準備しています。`
-      : `こんにちは、${nickname ? `${nickname}さん` : "リスナーさん"}！こちらTCS RADIO、DJ イエローバードです。あなたへの応援歌をお届けします。`;
+      : `こんにちは、${nickname ? `${nickname}さん` : "リスナーさん"}！こちら${radioStation}「${radioShow}」、${radioDj}だよ。スタジオへようこそ！ 君のお話から、君だけの応援歌を一曲贈るよ。`;
     onLiveTranscript("assistant", line, false);
     timer.current = window.setTimeout(() => { onLiveTranscript("assistant", line, true); onTranscript("assistant", line); setState("done"); onComplete?.(); }, 1100);
   }
@@ -30,5 +31,5 @@ export function DemoVoice({ autoStart = false, characterName, nickname, onComple
     // `start` deliberately runs once when the talk scene appears.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart]);
-  return <div className="talk-complete">{state === "idle" && <button className="button warm" onClick={start}>放送をつなぐ</button>}<small>{state === "idle" ? "DJが通話を始めます" : state === "talking" ? "DJが話しています…" : "曲を選んでいます…"}</small></div>;
+  return <div className="talk-complete">{state === "idle" && <button className="button warm" onClick={start}>DJと話す</button>}<small>{state === "idle" ? "DJが会話を始めます" : state === "talking" ? "DJが話しています…" : "曲を選んでいます…"}</small></div>;
 }

@@ -1,4 +1,5 @@
 "use client";
+import { formatRadioCaption, radioDj, radioShow, radioStation } from "@/lib/radio-brand";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Guard, Stage } from "@/components/shell";
@@ -22,6 +23,10 @@ function TalkInterview() {
   const { data, update } = useSession();
   const router = useRouter();
   const [summarizing, setSummarizing] = useState(false);
+  const [materialCheck, setMaterialCheck] = useState("発言待ち");
+  const [pollFailure, setPollFailure] = useState(false);
+  const [introductionProgress, setIntroductionProgress] = useState<"requested" | "speaking" | "interrupted">();
+  const introductionLabel = introductionProgress === "speaking" ? "DJが紹介中" : introductionProgress === "requested" ? "DJの発話開始待ち" : introductionProgress === "interrupted" ? "中断後の会話の区切り待ち" : "会話の区切り待ち";
   const [caption, setCaption] = useState<{ role: "user" | "assistant"; text: string } | null>(null);
   const [error, setError] = useState("");
   const [jobConnectionLost, setJobConnectionLost] = useState(false);
@@ -45,6 +50,11 @@ function TalkInterview() {
   const messages = data.conversation;
   const conversationRef = useRef(messages);
   const answersRef = useRef(data.answers);
+  const getWaitingContext = useCallback(() => {
+    const turns = conversationRef.current;
+    const lastWithdrawal = turns.findLastIndex(({ role, text }) => role === "user" && isSongWithdrawal(text));
+    return JSON.stringify(turns.slice(lastWithdrawal + 1).slice(-4).map(({ role, text }) => ({ role, text: text.slice(0, 200) })));
+  }, []);
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
 
   useEffect(() => { conversationRef.current = messages; }, [messages]);
@@ -68,6 +78,8 @@ function TalkInterview() {
       const pending = { id, status: "preparing" as const };
       setJob(pending);
       setVoiceFallback(false);
+      setIntroductionProgress(undefined);
+      setPollFailure(false);
       update({ musicJob: pending, songMaterial: material, result: undefined });
     } catch (cause) {
       if (controller.signal.aborted) return;
@@ -126,6 +138,7 @@ function TalkInterview() {
         const response = await fetch(`/api/music-jobs/${job.id}`, { signal: controller.signal });
         const next: unknown = await response.json();
         if (controller.signal.aborted || abandonedJob.current === job.id) return;
+        setPollFailure(!response.ok);
         if (response.ok && isRecord(next) && typeof next.status === "string") {
           const typed = next as typeof job;
           setJob(typed);
@@ -141,7 +154,7 @@ function TalkInterview() {
           setJobConnectionLost(true);
         }
       } catch {
-        // A temporary polling failure must not stop the server-side music job.
+        if (!controller.signal.aborted) setPollFailure(true);
       } finally {
         polling = false;
       }
@@ -253,6 +266,7 @@ function TalkInterview() {
       abandonedJob.current = job?.id;
       selection.current?.abort();
       jobRequest.current?.abort();
+      setMaterialCheck("題材を取り消しました");
       jobStartLock.current = false;
       setSummarizing(false);
       setJob(undefined);
@@ -266,17 +280,25 @@ function TalkInterview() {
     selection.current?.abort();
     const controller = new AbortController();
     selection.current = controller;
+    setMaterialCheck("本人の発言を判定中");
     try {
       const withdrawal = conversation.findLastIndex((message) => message.role === "user" && isSongWithdrawal(message.text));
       const response = await fetch("/api/talk", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ songConversation: conversation.slice(withdrawal + 1).slice(-10) }), signal: controller.signal,
+        body: JSON.stringify({ songConversation: conversation.slice(withdrawal + 1).slice(-10) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(22_000)]),
       });
       const value: unknown = await response.json();
-      if (controller.signal.aborted || !response.ok || !isRecord(value) || jobStartLock.current) return;
+      if (controller.signal.aborted || jobStartLock.current) return;
+      if (!response.ok || !isRecord(value) || !("material" in value)) {
+        setMaterialCheck(`題材判定の応答エラー（HTTP ${response.status}）`);
+        return;
+      }
       const material = parseSongMaterial(value.material);
+      setMaterialCheck(material ? "題材が揃いました" : "題材または具体的な場面を聞き取り中");
       if (material) void composeProfile(material);
-    } catch { /* The DJ continues the interview if material selection is unavailable. */ }
+    } catch {
+      if (!controller.signal.aborted) setMaterialCheck("題材判定の通信エラーまたはタイムアウト");
+    }
   }
 
   function updateCaption(role: "user" | "assistant", transcript: string, final: boolean) {
@@ -293,7 +315,7 @@ function TalkInterview() {
   const assistantIsSpeaking = caption?.role === "assistant";
   const userIsSpeaking = caption?.role === "user";
   const readyLine = `${nickname ? nickname + "さん。" : ""}あなたのための一曲をお届けします。`;
-  const line = assistantIsSpeaking ? caption.text : isDemo && playable ? `さて、${nickname || "リスナー"}さん。ここで一曲。${readyLine}` : latestAssistant?.text ?? "";
+  const line = assistantIsSpeaking ? caption.text : isDemo && playable ? `さて、${nickname || "リスナー"}さん。ここで一曲。${readyLine}` : formatRadioCaption(latestAssistant?.text ?? "");
 
   return <Stage minimal>
     <section className={`vn-scene radio-dj ${style}`}>
@@ -301,14 +323,14 @@ function TalkInterview() {
       <div className="vn-vignette" aria-hidden="true" />
       <div className="radio-console" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div>
       <div className="dj-bird-placeholder" aria-label="仮の鳥型DJシルエット"><i /><b /><em /></div>
-      <div className="radio-on-air" aria-hidden="true"><b>ON AIR</b><span>LIVE CALL</span></div>
-      <div className="vn-topline"><span>TCS RADIO · LIVE CALL</span><span>90 SECOND ANTHEM</span></div>
+      <div className="radio-on-air" aria-hidden="true"><b>ON AIR</b><span>STUDIO</span></div>
+      <div className="vn-topline"><span>{radioStation} · {radioShow}</span><span>90 SECOND ANTHEM</span></div>
       <div className="vn-dialogue">
-        <div className="vn-nameplate assistant"><span>DJ イエローバード</span><small>TCS RADIO · LIVE ON AIR</small></div>
+        <div className="vn-nameplate assistant"><span>{radioDj}</span><small>{radioShow} · ON AIR</small></div>
         <p className="vn-line" aria-live="polite">{line}</p>
-        {userIsSpeaking && <p className="vn-listening" role="status"><b>CALLER ON LINE</b><span>あなたの声を聞いています</span></p>}
+        {userIsSpeaking && <p className="vn-listening" role="status"><b>IN STUDIO</b><span>あなたの声を聞いています</span></p>}
         <div className="vn-controls">
-          {isDemo ? <DemoVoice autoStart={!job} nickname={nickname} onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} nickname={nickname} phase={job ? "waiting" : "interview"} autoStart guidance={playable ? "ready" : job && job.status !== "failed" ? "create" : undefined} material={data.songMaterial} onIntroductionEnded={openResult} onIntroductionUnavailable={showVoiceFallback} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
+          {isDemo ? <DemoVoice autoStart={!job} nickname={nickname} onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} nickname={nickname} phase={job ? "waiting" : "interview"} autoStart guidance={playable ? "ready" : job && job.status !== "failed" ? "create" : undefined} material={data.songMaterial} getWaitingContext={getWaitingContext} onIntroductionEnded={openResult} onIntroductionProgress={process.env.NODE_ENV === "development" ? setIntroductionProgress : undefined} onIntroductionUnavailable={showVoiceFallback} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
           {playable && voiceFallback && <button className="vn-finish" onClick={openResult}>今夜の一曲を聴く　→</button>}
         </div>
         {!job && !nickname && <label className="nickname-check">呼び名の聞き取り確認・修正<input value={data.answers.nickname} onChange={(event) => correctNickname(event.target.value)} placeholder="例：かいかい" maxLength={24} /></label>}
@@ -318,9 +340,20 @@ function TalkInterview() {
           {!job && data.songMaterial && <button className="vn-finish" onClick={restartLostJob}>もう一度つなぐ</button>}
         </p>}
         {job?.status === "failed" && <p className="inline-error" role="alert">{job.error || "曲の準備がうまくいきませんでした。"}<button className="vn-finish" onClick={retryMusic}>もう一度つなぐ</button>{jobConnectionLost && data.songMaterial && <button className="vn-finish" onClick={restartLostJob}>会話内容からもう一度準備する</button>}</p>}
+        {process.env.NODE_ENV === "development" && (
+          <details className="radio-diagnostics">
+            <summary>進行状況（開発用）</summary>
+            <ul>
+              <li>題材判定 {materialCheck}</li>
+              <li>楽曲制作 {job?.status ?? (summarizing ? "開始リクエスト中" : error && data.songMaterial ? "開始失敗" : "未開始")}{pollFailure && "（状態の取得に失敗）"}</li>
+              <li>音源 {playable ? "再生可能" : readyJob ? error ? "読み込み失敗" : "読み込み中" : "未取得"}</li>
+              <li>曲紹介 {playable ? voiceFallback ? "音声案内なし・手動で再生へ" : introductionLabel : "待機"}</li>
+            </ul>
+          </details>
+        )}
         <details className="vn-history">
           <summary>会話ログを見る <span>{messages.length}</span></summary>
-          <div>{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}><b>{message.role === "assistant" ? "DJ イエローバード" : "あなた"}</b>{message.text}</p>)}</div>
+          <div>{messages.map((message, index) => <p key={`${message.role}-${index}`} className={message.role}><b>{message.role === "assistant" ? radioDj : "あなた"}</b>{message.role === "assistant" ? formatRadioCaption(message.text) : message.text}</p>)}</div>
         </details>
       </div>
     </section>

@@ -1,4 +1,5 @@
 "use client";
+import { radioDj, radioShow, radioStation } from "@/lib/radio-brand";
 import { useEffect, useRef, useState } from "react";
 import { Guard, Stage } from "@/components/shell";
 import { useSession } from "@/components/session";
@@ -56,16 +57,17 @@ function MusicVideo() {
     <div className="mv-video radio-booth-backdrop" aria-hidden="true" />
     <div className="mv-shade" />
     <div className="dj-bird-placeholder dj-bird-result" aria-label="仮の鳥型DJシルエット"><i /><b /><em /></div>
-    <header className="mv-header radio-mv-header"><span>TCS RADIO 90.0</span><b>ON AIR · YOUR ANTHEM</b><span>{isDemo ? "DEMO BROADCAST" : "LIVE BROADCAST"}</span></header>
+    <header className="mv-header radio-mv-header"><span>{radioStation} 90.0</span><b>{radioShow}</b><span>{isDemo ? "DEMO BROADCAST" : "LIVE BROADCAST"}</span></header>
     <div className={`radio-play-meter${playing ? " is-playing" : ""}`} aria-label={playing ? "再生中" : "停止中"}><i /><i /><i /><i /><i /></div>
     <main className="mv-center">
-      <div className={`mv-title-card${hasStarted ? " is-hidden" : ""}`} aria-hidden={hasStarted}><p>TCS RADIO · NOW PLAYING</p><h1>{source.title}</h1><span>DJから、あなたへの一曲です</span></div>
+      <div className={`mv-title-card${hasStarted ? " is-hidden" : ""}`} aria-hidden={hasStarted}><p>{radioStation} · NOW PLAYING</p><h1>{source.title}</h1><span>{radioDj}から、あなたへの一曲です</span></div>
       <div className="mv-caption" aria-live="polite"><span>{activeCue?.section || "LYRICS"}{activeCue?.synced ? " · SYNCED" : " · DEMO TIMING"}</span><strong>{activeLine}</strong></div>
       {ended && <p className="radio-signoff" role="status">以上、あなたのための一曲でした。今日の一歩を、TCS RADIOは応援しています。</p>}
     </main>
     <footer className="mv-controls">
       <button className="mv-play" onClick={toggle} aria-label={playing ? "一時停止" : "再生"}>{playing ? "Ⅱ" : "▶"}</button>
       <div className="mv-progress"><input aria-label="再生位置" type="range" min="0" max={duration} step="0.1" value={currentTime} onChange={(event) => { const time = Number(event.target.value); if (audio.current) audio.current.currentTime = time; setCurrentTime(time); }} /><span>残り {Math.floor(remaining / 60)}:{String(Math.floor(remaining % 60)).padStart(2, "0")}</span></div>
+      {process.env.NODE_ENV === "development" && <small>再生（開発用） {audioError ? "失敗" : ended ? "終了" : playing ? "再生中" : hasStarted ? "一時停止中" : "開始待ち"}</small>}
       <button className="mv-end" onClick={finish}>最初に戻る</button>
     </footer>
     <audio ref={audio} src={source.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 90)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => { setHasStarted(true); setPlaying(true); }} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrentTime(duration); setEnded(true); }} onError={() => setAudioError("音源を届けられませんでした。もう一度、放送をつなぎ直してください。")} />
