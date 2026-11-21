@@ -6,7 +6,7 @@ import { Guard, Stage } from "@/components/shell";
 import { RealtimeVoice } from "@/components/realtime-voice";
 import { DemoVoice } from "@/components/demo-voice";
 import { useSession } from "@/components/session";
-import { isSongWithdrawal, materialConversation, parseSongMaterial, type SongMaterial } from "@/lib/song-material";
+import { isSongWithdrawal, materialConversation, parseSongMaterial, songTopicConversation, type SongMaterial } from "@/lib/song-material";
 import { demoResult } from "@/lib/demo";
 import { saveGeneratedMusic } from "@/lib/music-runtime";
 import { isRecord } from "@/lib/validation";
@@ -288,12 +288,17 @@ function TalkInterview() {
     await checkMaterial(conversation);
   }
 
-  async function checkMaterial(conversation: ConversationMessage[]) {
+  async function checkMaterial(history: ConversationMessage[]) {
     if (jobStartLock.current) return;
+    const conversation = songTopicConversation(history);
+    if (!conversation) {
+      setMaterialCheck("曲の題材を聞く前の挨拶");
+      return;
+    }
     const lastUser = conversation.findLastIndex(({ role }) => role === "user");
     if (lastUser < 0) return;
     if (selection.current) {
-      queuedSelection.current = conversation;
+      queuedSelection.current = history;
       return;
     }
     const controller = new AbortController();
@@ -345,6 +350,13 @@ function TalkInterview() {
     update({ answers });
   }
 
+  const needsTopicQuestion = !job && messages.some(({ role }) => role === "user") && !songTopicConversation(messages);
+  const guidance = playable ? "ready"
+    : job && job.status !== "failed" ? "create"
+    : needsTopicQuestion ? "ask_topic"
+    : !job && needsMusicPreference ? "ask_music"
+    : undefined;
+
   const assistantIsSpeaking = caption?.role === "assistant";
   const userIsSpeaking = caption?.role === "user";
   const readyLine = `${nickname ? nickname + "さん。" : ""}あなたのための一曲をお届けします。`;
@@ -363,7 +375,7 @@ function TalkInterview() {
         <p className="vn-line" aria-live="polite">{line}</p>
         {userIsSpeaking && <p className="vn-listening" role="status"><b>IN STUDIO</b><span>あなたの声を聞いています</span></p>}
         <div className="vn-controls">
-          {isDemo ? <DemoVoice autoStart={!job} nickname={nickname} onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} nickname={nickname} phase={job ? "waiting" : "interview"} autoStart guidance={playable ? "ready" : job && job.status !== "failed" ? "create" : !job && needsMusicPreference ? "ask_music" : undefined} material={data.songMaterial} getWaitingContext={getWaitingContext} onIntroductionEnded={openResult} onIntroductionProgress={process.env.NODE_ENV === "development" ? setIntroductionProgress : undefined} onIntroductionUnavailable={showVoiceFallback} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
+          {isDemo ? <DemoVoice autoStart={!job} nickname={nickname} onComplete={continueDemo} onTranscript={saveTranscript} onLiveTranscript={updateCaption} /> : <RealtimeVoice style={style} nickname={nickname} phase={job ? "waiting" : "interview"} autoStart guidance={guidance} material={data.songMaterial} getWaitingContext={getWaitingContext} onIntroductionEnded={openResult} onIntroductionProgress={process.env.NODE_ENV === "development" ? setIntroductionProgress : undefined} onIntroductionUnavailable={showVoiceFallback} onTranscript={saveTranscript} onLiveTranscript={updateCaption} />}
           {playable && voiceFallback && <button className="vn-finish" onClick={openResult}>今夜の一曲を聴く　→</button>}
         </div>
         {!job && !nickname && <label className="nickname-check">呼び名の聞き取り確認・修正<input value={data.answers.nickname} onChange={(event) => correctNickname(event.target.value)} placeholder="例：かいかい" maxLength={24} /></label>}

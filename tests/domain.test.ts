@@ -4,7 +4,7 @@ import { answerErrors, parseCreativeBrief, parseSongProfile, parseSubmission, re
 import { mockCreativeBrief } from "../lib/providers/mock-brief.ts";
 import { addMandatorySpec } from "../lib/prompt-format.ts";
 import { readBody, safeOrigin } from "../lib/api.ts";
-import { hasMusicDirection, isSongWithdrawal, materialConversation, parseSongMaterial } from "../lib/song-material.ts";
+import { isSongWithdrawal, materialConversation, parseSongMaterial, songTopicConversation, songTopicQuestion } from "../lib/song-material.ts";
 import { formatRadioCaption } from "../lib/radio-brand.ts";
 import { isMeaningfulRadioTurn, isRadioName } from "../lib/radio-name.ts";
 import { fillExpectedAnswer, mergeTalkAnswers, nextQuestionId } from "../lib/talk.ts";
@@ -43,12 +43,6 @@ test("spoken station names use the on-screen spelling", () => {
   assert.equal(formatRadioCaption("ラジオの話をしよう"), "ラジオの話をしよう");
 });
 
-test("song preference must contain a musical direction", () => {
-  assert.equal(hasMusicDirection("スピッツが好きです"), false);
-  assert.equal(hasMusicDirection("静かに始まって、サビで少し広がる感じがいい"), true);
-  assert.equal(hasMusicDirection("ピアノの音が好きです"), true);
-});
-
 test("selection keeps original story excerpts together with recent music answers", () => {
   const topic = { role: "user" as const, text: "文化祭の帰り道を歌にしたい" };
   const scene = { role: "user" as const, text: "雨の中を友達と走った" };
@@ -59,4 +53,37 @@ test("selection keeps original story excerpts together with recent music answers
   assert.equal(selected[0], topic);
   assert(selected.includes(scene));
   assert.equal(selected.at(-1), music);
+});
+
+test("song material keeps distinct details from short replies", () => {
+  assert.deepEqual(parseSongMaterial({
+    topic: "文化祭の帰り道", scene: "傘が裏返った",
+    sceneDetails: ["友達", " 二人で笑った ", "", "あ".repeat(101)], musicPreference: "おまかせ",
+  }), {
+    topic: "文化祭の帰り道", scene: "傘が裏返った",
+    sceneDetails: ["友達", "二人で笑った"], musicPreference: "おまかせ",
+  });
+});
+
+test("delegated music adds a familiar arrangement without overriding explicit preferences", () => {
+  const brief = mockCreativeBrief(parseSubmission(valid));
+  assert.match(addMandatorySpec(brief, true).elevenMusicPrompt, /親しみやすい日本語ポップス/);
+  assert.doesNotMatch(addMandatorySpec(brief).elevenMusicPrompt, /曲調は番組におまかせ/);
+});
+
+test("the song conversation starts after the festival greeting", () => {
+  const greeting = [
+    { role: "assistant" as const, text: "今日、会場で何か見てきた？" },
+    { role: "user" as const, text: "模型を見て、弟と一緒にびっくりしました。" },
+  ];
+  assert.equal(songTopicConversation(greeting), undefined);
+  const topic = { role: "assistant" as const, text: `模型いいね。${songTopicQuestion}` };
+  const answer = { role: "user" as const, text: "歌にするなら昔のバンドの話かな。" };
+  assert.deepEqual(songTopicConversation([...greeting, topic, answer]), [topic, answer]);
+  const transcribedTopic = { role: "assistant" as const, text: "模型いいね。何か、歌にしたいシーンってありますか？" };
+  assert.deepEqual(songTopicConversation([...greeting, transcribedTopic, answer]), [transcribedTopic, answer]);
+  const interruptedTopic = { role: "assistant" as const, text: "模型いいね。曲にしてみたい場面って" };
+  assert.equal(songTopicConversation([...greeting, interruptedTopic]), undefined);
+  const festivalChoice = { role: "user" as const, text: "今の模型の話を曲にしたい。" };
+  assert.deepEqual(songTopicConversation([...greeting, topic, festivalChoice]), [topic, festivalChoice]);
 });

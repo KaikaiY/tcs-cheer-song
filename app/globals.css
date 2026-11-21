@@ -47,3 +47,6 @@
 .radio-home-bird,.radio-dj .dj-bird-placeholder,.dj-bird-result{display:none}
 
 .radio-diagnostics{margin-top:10px;color:#ffffffbf;font-size:12px}.radio-diagnostics summary{cursor:pointer}.radio-diagnostics ul{margin:6px 0;padding-left:18px}
+
+.radio-home.is-entering-fade{opacity:0;transition:opacity 400ms ease}
+@media(prefers-reduced-motion:reduce){.radio-home.is-entering-fade{transition:none}}

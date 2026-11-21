@@ -58,14 +58,14 @@ async function run(job: InternalJob, input: JobInput) {
     profile = parseSongProfile(material ? {
       version: "v1",
       summary: material.topic,
-      personalMotifs: material.scene.match(/[^。！？]{1,100}[。！？]?/gu)?.map((part) => part.slice(0, 100).trim()).filter(Boolean).slice(0, 4) ?? [],
+      personalMotifs: [...new Set([...(material.scene.match(/[^。！？]{1,100}[。！？]?/gu) ?? []).map((part) => part.slice(0, 100).trim()), ...(material.sceneDetails ?? [])])].filter(Boolean).slice(0, 4),
       musicalHints: material.musicPreference && material.musicPreference !== "おまかせ" ? [material.musicPreference] : [],
     } : mock ? mockSongProfile(input) : await openaiSongProfile(input, signal));
   } catch { failJob(job, "会話内容を楽曲プロフィールに整理できませんでした。会話を続けてから、もう一度お試しください。"); return; }
   job.profile = profile;
   try {
     const submission = { consent: true as const, style: input.style, answers: input.answers, profile };
-    const brief = addMandatorySpec(parseCreativeBrief(mock ? mockCreativeBrief(submission) : await openaiCreativeBrief(submission, signal)));
+    const brief = addMandatorySpec(parseCreativeBrief(mock ? mockCreativeBrief(submission) : await openaiCreativeBrief(submission, signal)), input.material?.musicPreference === "おまかせ");
     job.result = { brief, briefMode: mock ? "mock" : "live" };
   } catch { failJob(job, "楽曲の設計書を作成できませんでした。時間をおいて、音楽生成をもう一度お試しください。"); return; }
   job.status = "generating";
