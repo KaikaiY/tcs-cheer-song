@@ -74,5 +74,6 @@ export type Session = {
   profile?: SongProfile;
   result?: Result;
   musicJob?: MusicJob;
+  completedPlaybackId?: string;
   mockScenario?: MockScenario;
 };

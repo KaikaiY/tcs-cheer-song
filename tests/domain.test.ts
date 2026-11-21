@@ -4,7 +4,7 @@ import { answerErrors, parseCreativeBrief, parseSongProfile, parseSubmission, re
 import { mockCreativeBrief } from "../lib/providers/mock-brief.ts";
 import { addMandatorySpec } from "../lib/prompt-format.ts";
 import { readBody, safeOrigin } from "../lib/api.ts";
-import { hasMusicDirection, isSongWithdrawal, parseSongMaterial } from "../lib/song-material.ts";
+import { hasMusicDirection, isSongWithdrawal, materialConversation, parseSongMaterial } from "../lib/song-material.ts";
 import { formatRadioCaption } from "../lib/radio-brand.ts";
 import { isMeaningfulRadioTurn, isRadioName } from "../lib/radio-name.ts";
 import { fillExpectedAnswer, mergeTalkAnswers, nextQuestionId } from "../lib/talk.ts";
@@ -47,4 +47,16 @@ test("song preference must contain a musical direction", () => {
   assert.equal(hasMusicDirection("スピッツが好きです"), false);
   assert.equal(hasMusicDirection("静かに始まって、サビで少し広がる感じがいい"), true);
   assert.equal(hasMusicDirection("ピアノの音が好きです"), true);
+});
+
+test("selection keeps original story excerpts together with recent music answers", () => {
+  const topic = { role: "user" as const, text: "文化祭の帰り道を歌にしたい" };
+  const scene = { role: "user" as const, text: "雨の中を友達と走った" };
+  const music = { role: "user" as const, text: "しっとりしたピアノがいい" };
+  const history = [topic, ...Array.from({ length: 12 }, () => ({ role: "assistant" as const, text: "雑談" })), scene, music];
+  const selected = materialConversation(history, { topic: topic.text, scene: scene.text });
+  assert.equal(selected.length, 9);
+  assert.equal(selected[0], topic);
+  assert(selected.includes(scene));
+  assert.equal(selected.at(-1), music);
 });

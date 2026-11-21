@@ -5,7 +5,6 @@ type RealtimeCall = {
   connection: RTCPeerConnection;
   channel: RTCDataChannel;
   stream: MediaStream;
-  maxSeconds: number;
   close: () => void;
 };
 
@@ -27,7 +26,7 @@ export async function connectRealtimeCall(options: CallOptions, signal: AbortSig
       body: JSON.stringify(options), signal,
     });
     if (!response.ok) throw new Error("通話につながりませんでした。");
-    const { clientSecret, maxSeconds } = await response.json() as { clientSecret: string; maxSeconds: number };
+    const { clientSecret } = await response.json() as { clientSecret: string };
     signal.throwIfAborted();
     connection = new RTCPeerConnection();
     const channel = connection.createDataChannel("oai-events");
@@ -52,7 +51,7 @@ export async function connectRealtimeCall(options: CallOptions, signal: AbortSig
       });
     }
     signal.throwIfAborted();
-    return { connection, channel, stream, maxSeconds, close };
+    return { connection, channel, stream, close };
   } catch (error) {
     close();
     throw error;

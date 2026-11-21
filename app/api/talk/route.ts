@@ -6,6 +6,7 @@ import { questions } from "@/lib/questions";
 import { isRecord, isStyle } from "@/lib/validation";
 import { mockTalk } from "@/lib/providers/mock-talk";
 import { openaiSongMaterial, openaiTalk, TalkResponseError } from "@/lib/providers/openai";
+import { parseSongMaterial } from "@/lib/song-material";
 import type { Answers, ConversationMessage } from "@/lib/types";
 
 function parseInput(value: unknown) {
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
           ? [{ role: item.role, text: item.text.slice(0, 500) }]
           : []);
       const selection = !mock && conversation.at(-1)?.role === "user"
-        ? await openaiSongMaterial(conversation, signal)
+        ? await openaiSongMaterial(conversation, signal, parseSongMaterial(body.storyDraft))
         : { material: null, waitingFor: "story" };
       return Response.json(selection, { headers: privateHeaders });
     }

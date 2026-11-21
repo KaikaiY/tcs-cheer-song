@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (!apiKey) return Response.json({ error: "OpenAI APIキーが設定されていません。" }, { status: 503, headers: privateHeaders });
   let style: "male_cheer_squad" | "female_idol" = "male_cheer_squad"; let waiting = false; let nickname = "";
   try { const body = await readBody(request); if (isRecord(body) && isStyle(body.style)) style = body.style; waiting = isRecord(body) && body.phase === "waiting"; if (isRecord(body) && typeof body.nickname === "string") nickname = body.nickname.trim().slice(0, 24); } catch { /* Default safely. */ }
-  const voice = style === "female_idol" ? "sage" : "cedar";
+  const voice = style === "female_idol" ? "sage" : "coral";
   const instructions = yellowBirdInstructions({ nickname, waiting });
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
@@ -25,5 +25,5 @@ export async function POST(request: Request) {
     console.error("OpenAI Realtime session setup failed", { status: response.status, errorType: detail });
     return Response.json({ error: `Realtime接続の準備に失敗しました（OpenAI: ${response.status}）。` }, { status: 502, headers: privateHeaders });
   }
-  return Response.json({ clientSecret: (value as { value: string }).value, model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1", maxSeconds: 600 }, { headers: privateHeaders });
+  return Response.json({ clientSecret: (value as { value: string }).value, model: process.env.OPENAI_REALTIME_MODEL || "gpt-realtime-2.1" }, { headers: privateHeaders });
 }

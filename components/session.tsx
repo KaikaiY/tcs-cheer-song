@@ -7,6 +7,7 @@ import {
   useCallback,
   useRef,
 } from "react";
+import { usePathname } from "next/navigation";
 import { emptyAnswers, questions } from "@/lib/questions";
 import { isRecord, isStyle, parseCreativeBrief, parseSongProfile } from "@/lib/validation";
 import { parseSongMaterial } from "@/lib/song-material";
@@ -28,6 +29,7 @@ const Context = createContext<{
   reset: () => void;
 } | null>(null);
 export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [data, setData] = useState<Session>(fresh);
   const current = useRef(data);
   const [ready, setReady] = useState(false);
@@ -62,6 +64,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                   ? value.questionIndex
                   : 0,
               songMaterial: parseSongMaterial(value.songMaterial),
+              completedPlaybackId: typeof value.completedPlaybackId === "string" ? value.completedPlaybackId : undefined,
               conversation: Array.isArray(value.conversation)
                 ? value.conversation.flatMap((message) => isRecord(message) && (message.role === "user" || message.role === "assistant") && typeof message.text === "string" && message.text.length <= 500 ? [{ role: message.role, text: message.text }] : [])
                 : [],
@@ -135,13 +138,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setData(current.current);
   }, []);
   useEffect(() => {
+    if (pathname === "/talk" || pathname === "/generating") return;
     const idleMs = 10 * 60 * 1000;
     let timer = window.setTimeout(() => reset(), idleMs);
     const renew = () => { window.clearTimeout(timer); timer = window.setTimeout(() => reset(), idleMs); };
     window.addEventListener("pointerdown", renew);
     window.addEventListener("keydown", renew);
     return () => { window.clearTimeout(timer); window.removeEventListener("pointerdown", renew); window.removeEventListener("keydown", renew); };
-  }, [reset]);
+  }, [pathname, reset]);
   return (
     <Context.Provider value={{ data, ready, storageWarning, update, reset }}>
       {children}

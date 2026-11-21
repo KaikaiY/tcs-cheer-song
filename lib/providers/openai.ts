@@ -1,5 +1,5 @@
 import "server-only";
-import { hasMusicDirection, parseSongMaterial } from "../song-material";
+import { hasMusicDirection, parseSongMaterial, type SongMaterial } from "../song-material";
 import OpenAI from "openai";
 import type { Response as OpenAIResponse, ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { creativeBriefInstructions, creativeBriefSchema } from "../prompts/creative-brief";
@@ -88,7 +88,12 @@ export async function openaiTalk(input: TalkRequest, signal: AbortSignal): Promi
   return { reply: (value as { reply: string }).reply.trim().slice(0, 120), answers, complete: isComplete(answers), nextQuestionId: next };
 }
 
-export async function openaiSongMaterial(conversation: ConversationMessage[], signal: AbortSignal) {
+export async function openaiSongMaterial(conversation: ConversationMessage[], signal: AbortSignal, draft?: SongMaterial) {
+  const wasSpokenByUser = (excerpt: unknown) => typeof excerpt === "string" && Boolean(excerpt.trim()) &&
+    conversation.some(({ role, text }) => role === "user" && text.includes(excerpt));
+  const previousStory = draft && wasSpokenByUser(draft.topic) && wasSpokenByUser(draft.scene)
+    ? { topic: draft.topic, scene: draft.scene }
+    : undefined;
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 9_000, maxRetries: 0 });
   const params: ResponseCreateParamsNonStreaming = {
     model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
@@ -98,23 +103,24 @@ export async function openaiSongMaterial(conversation: ConversationMessage[], si
 題材:
 - topic は本人が歌に残したい話の芯。scene はその具体的な場面、行動、工夫、覚えている一言。どちらも本人の発言から連続した原文をコピーする。句読点を追加したり言い換えたりしない。
 - 「仕事に有利だからExcelを勉強しています」は場面がない。topic と scene は空。思い出なら「文化祭の帰り道に、雨の中で友達と走って笑った」だけでも具体的な場面になる。今の挑戦や目標を追加で求めない。
-- DJだけが言ったこと、本人が除外した話、個人を特定できる内容は選ばない。曲調の質問と回答は話題変更と見なさず、それ以前の題材を残す。
+- DJだけが言ったこと、本人が除外した話、個人を特定できる内容は選ばない。曲調の質問と回答は話題変更と見なさず、それ以前の題材を残す。previousStory があれば、別の題材が明示されるまでそれを維持する。本人が別の話で作りたいと明示したら discardPreviousStory を true にする。普段の雑談や曲調の返答では false。
 
 曲調:
 - musicStatus は、本人が好みを答えていなければ missing。曲名・歌手名だけでも missing。
 - 曲調を聞かれて「おまかせ」「特に希望はない」「分からない」と本人が答えたら default。musicEvidence に本人の答えを原文でコピーし、musicHint は空。
 - 本人が具体的な好みを述べたら specified。musicEvidence に本人の答えを原文でコピーし、musicHint には音や歌い方の特徴だけを要約する。曲名や歌手名は含めない。
 - missing なら musicHint と musicEvidence は空。曲調が missing でも、題材が十分なら topic と scene は返す。`,
-    input: JSON.stringify(conversation),
+    input: JSON.stringify({ previousStory, conversation }),
     max_output_tokens: 1000,
     text: { format: { type: "json_schema", name: "song_material", strict: true, schema: {
-      type: "object", additionalProperties: false, required: ["topic", "scene", "musicStatus", "musicHint", "musicEvidence"],
+      type: "object", additionalProperties: false, required: ["topic", "scene", "musicStatus", "musicHint", "musicEvidence", "discardPreviousStory"],
       properties: {
         topic: { type: "string", maxLength: 160 },
         scene: { type: "string", maxLength: 250 },
         musicStatus: { type: "string", enum: ["missing", "default", "specified"] },
         musicHint: { type: "string", maxLength: 100 },
         musicEvidence: { type: "string", maxLength: 250 },
+        discardPreviousStory: { type: "boolean" },
       },
     } } },
   };
@@ -141,23 +147,25 @@ export async function openaiSongMaterial(conversation: ConversationMessage[], si
       if (attempt > 0 || signal.aborted || (!transientOutput && !transientRequest)) throw error;
     }
   }
-  const { topic, scene, musicStatus, musicHint, musicEvidence } = value;
-  const material = parseSongMaterial({ topic, scene });
-  const wasSpokenByUser = (excerpt: unknown) => typeof excerpt === "string" && Boolean(excerpt.trim()) &&
-    conversation.some(({ role, text }) => role === "user" && text.includes(excerpt));
-  if (!material || !wasSpokenByUser(material.topic) || !wasSpokenByUser(material.scene)) {
-    return { material: null, waitingFor: "story" } as const;
-  }
+  const { topic, scene, musicStatus, musicHint, musicEvidence, discardPreviousStory } = value;
+  const extracted = parseSongMaterial({ topic, scene });
+  const material = extracted && wasSpokenByUser(extracted.topic) && wasSpokenByUser(extracted.scene)
+    ? extracted
+    : discardPreviousStory === true ? undefined : previousStory;
+  if (!material) return { material: null, waitingFor: "story" } as const;
   const [question, answer] = conversation.slice(-2);
-  const delegated = question?.role === "assistant" && /曲調|歌で聴く|音楽|曲の雰囲気|曲の感じ|おまかせ/u.test(question.text)
-    && answer?.role === "user" && /^(?:おまかせ|お任せ|任せる|任せます)(?:で)?(?:お願いします|です)?[。！!\s]*$/u.test(answer.text.trim());
+  const delegated = answer?.role === "user" && (
+    /(?:曲調|曲の雰囲気|音楽の感じ)[はも、\s]*(?:おまかせ|お任せ)/u.test(answer.text) ||
+    (question?.role === "assistant" && /曲調|歌で聴く|音楽|曲の雰囲気|曲の感じ|おまかせ/u.test(question.text)
+      && /^(?:おまかせ|お任せ|任せる|任せます)(?:で)?(?:お願いします|です)?[。！!\s]*$/u.test(answer.text.trim()))
+  );
   const musicPreference = delegated || musicStatus === "default"
     ? "おまかせ"
-    : musicStatus === "specified" && typeof musicEvidence === "string" && hasMusicDirection(musicEvidence) ? musicHint : undefined;
+    : musicStatus === "specified" && typeof musicEvidence === "string" && (hasMusicDirection(musicEvidence) || /音色|リズム|歌い方|歌声|テンポ|メロディ|余韻|音の重なり/u.test(musicEvidence)) ? musicHint : undefined;
   const ready = delegated || wasSpokenByUser(musicEvidence) ? parseSongMaterial({ ...material, musicPreference }) : undefined;
   return ready?.musicPreference
     ? { material: ready, waitingFor: null }
-    : { material: null, waitingFor: "music" } as const;
+    : { material: null, waitingFor: "music", storyDraft: material } as const;
 }
 
 export async function openaiSongProfile(input: { style: Style; answers: Answers; conversation: ConversationMessage[] }, signal: AbortSignal): Promise<SongProfile> {

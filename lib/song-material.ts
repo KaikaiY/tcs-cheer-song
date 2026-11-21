@@ -1,3 +1,4 @@
+import type { ConversationMessage } from "./types";
 import { isRecord } from "./validation";
 
 export type SongMaterial = { topic: string; scene: string; musicPreference?: string };
@@ -19,4 +20,16 @@ export function isSongWithdrawal(text: string) {
 
 export function hasMusicDirection(text: string) {
   return /明る|暗め|静か|穏やか|落ち着|しっとり|ゆったり|ゆっくり|速め|遅め|アップテンポ|ミドルテンポ|軽快|元気|力強|激し|優し|やさし|柔らか|やわらか|かっこよ|かっこい|懐かし|切な|グルーヴ|ノリ|疾走感|盛り上が|広が|高い声|低い声|歌詞が聞き|ピアノ|ギター|弦楽器|アコースティック|バラード|ロック|ポップ|ジャズ|ヒップホップ|ラップ|ボサノバ|シティポップ|EDM|J[-‐ー ]?POP/iu.test(text);
+}
+
+export function materialConversation(conversation: ConversationMessage[], draft?: SongMaterial) {
+  const retained = new Set<number>();
+  if (draft) {
+    for (const excerpt of [draft.topic, draft.scene]) {
+      const index = conversation.findLastIndex(({ role, text }) => role === "user" && text.includes(excerpt));
+      if (index >= 0) retained.add(index);
+    }
+  }
+  for (let index = conversation.length - 1; index >= 0 && retained.size < 9; index -= 1) retained.add(index);
+  return conversation.filter((_, index) => retained.has(index));
 }
