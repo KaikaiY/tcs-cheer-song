@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Guard, Stage } from "@/components/shell";
 import { useSession } from "@/components/session";
 import { clearGeneratedMusic, readGeneratedMusic } from "@/lib/music-runtime";
+import { djSignoff } from "@/lib/dj-signoff";
 import { buildLyricCues, type LyricSection } from "@/lib/lyric-sync";
 
 export default function ResultPage() { return <Guard level="result"><MusicVideo /></Guard>; }
@@ -19,6 +20,9 @@ function parseLyrics(value: string | null): LyricSection[] { if (!value) return 
 function MusicVideo() {
   const { data, reset, update } = useSession();
   const audio = useRef<HTMLAudioElement>(null);
+  const signoffAudio = useRef<HTMLAudioElement>(null);
+  const signoffRequest = useRef<AbortController | null>(null);
+  const signoffUrl = useRef<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(90);
   const [playing, setPlaying] = useState(false);
@@ -37,12 +41,50 @@ function MusicVideo() {
     if (ended || new URLSearchParams(window.location.search).get("play") !== "1") return;
     void audio.current?.play().catch(() => { /* The play button remains available. */ });
   }, [ended, source?.audioUrl]);
+  useEffect(() => {
+    const player = signoffAudio.current;
+    return () => {
+      signoffRequest.current?.abort();
+      player?.pause();
+      if (signoffUrl.current) URL.revokeObjectURL(signoffUrl.current);
+    };
+  }, [result, source?.audioUrl]);
   if (!result || !source) return null;
   const style = result.brief.style;
   const sections = parseLyrics(source.lyrics);
   const cues = buildLyricCues(sections, source.wordTimestamps, duration);
   const activeCue = cues.find((cue) => currentTime >= cue.startSeconds && currentTime < cue.endSeconds) || cues.find((cue) => cue.startSeconds > currentTime) || cues.at(-1);
   const activeLine = activeCue?.text || "まもなく歌詞が表示されます";
+
+  function completePlayback() {
+    if (ended || signoffRequest.current) return;
+    setPlaying(false);
+    setCurrentTime(duration);
+    setAudioError("");
+    update({ completedPlaybackId: playbackId });
+    if (isDemo || !source) return;
+    const controller = new AbortController();
+    signoffRequest.current = controller;
+    void (async () => {
+      try {
+        const response = await fetch("/api/dj-signoff", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nickname: data.answers.nickname, title: source.title, style }),
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const speech = await response.blob();
+        const player = signoffAudio.current;
+        if (controller.signal.aborted || !player || !speech.size) return;
+        signoffUrl.current = URL.createObjectURL(speech);
+        player.src = signoffUrl.current;
+        await player.play();
+      } catch {
+        // The same sign-off remains visible if playback is unavailable.
+      }
+    })();
+  }
 
   function toggle() {
     if (ended || !audio.current) return;
@@ -62,8 +104,8 @@ function MusicVideo() {
     <div className={`radio-play-meter${playing ? " is-playing" : ""}`} aria-label={playing ? "再生中" : "停止中"}><i /><i /><i /><i /><i /></div>
     <main className="mv-center">
       <div className={`mv-title-card${hasStarted || ended ? " is-hidden" : ""}`} aria-hidden={hasStarted || ended}><p>{radioStation} · NOW PLAYING</p><h1>{source.title}</h1><span>{radioDj}から、あなたへの一曲です</span></div>
-      <div className="mv-caption" aria-live="polite"><span>{activeCue?.section || "LYRICS"}{activeCue?.synced ? " · SYNCED" : " · DEMO TIMING"}</span><strong>{activeLine}</strong></div>
-      {ended && <p className="radio-signoff" role="status">以上、あなたのための一曲でした。お話を聞かせてくれて、ありがとう。</p>}
+      {!ended && <div className="mv-caption" aria-live="polite"><span>{activeCue?.section || "LYRICS"}{activeCue?.synced ? " · SYNCED" : " · DEMO TIMING"}</span><strong>{activeLine}</strong></div>}
+      {ended && <p className="radio-signoff" role="status">{djSignoff(data.answers.nickname, source.title)}</p>}
     </main>
     <footer className="mv-controls">
       {!ended && <button className="mv-play" onClick={toggle} aria-label={playing ? "一時停止" : "再生"}>{playing ? "Ⅱ" : "▶"}</button>}
@@ -71,7 +113,8 @@ function MusicVideo() {
       {process.env.NODE_ENV === "development" && <small>再生（開発用） {audioError ? "失敗" : ended ? "終了" : playing ? "再生中" : hasStarted ? "一時停止中" : "開始待ち"}</small>}
       <button className="mv-end" onClick={finish}>最初に戻る</button>
     </footer>
-    <audio ref={audio} src={ended ? undefined : source.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 90)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => { setHasStarted(true); setPlaying(true); }} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrentTime(duration); setAudioError(""); update({ completedPlaybackId: playbackId }); }} onError={() => setAudioError("音源を届けられませんでした。もう一度、放送をつなぎ直してください。")} />
+    <audio ref={audio} src={ended ? undefined : source.audioUrl} preload="metadata" onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 90)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => { setHasStarted(true); setPlaying(true); }} onPause={() => setPlaying(false)} onEnded={completePlayback} onError={() => setAudioError("音源を届けられませんでした。もう一度、放送をつなぎ直してください。")} />
+    <audio ref={signoffAudio} />
     {!ended && audioError && <p className="mv-error" role="alert">{audioError}<button onClick={retryAudio}>もう一度つなぐ</button></p>}
     <details className="mv-details"><summary>歌詞・楽曲設計を見る</summary><div>{sections.map((section, index) => <section key={`${section.name}-${index}`}><b>{section.name}</b><p>{section.lines.join("\n")}</p></section>)}</div></details>
   </section></Stage>;

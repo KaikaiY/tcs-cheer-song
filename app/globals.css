@@ -50,3 +50,35 @@
 
 .radio-home.is-entering-fade{opacity:0;transition:opacity 400ms ease}
 @media(prefers-reduced-motion:reduce){.radio-home.is-entering-fade{transition:none}}
+
+.on-air-switch {
+  width: min(100%, 190px);
+  display: grid;
+  gap: 6px;
+  justify-items: stretch;
+  padding: 7px 9px;
+  border: 1px solid #6f5849;
+  border-radius: 10px;
+  background: linear-gradient(#30261f, #1b1512);
+  color: #faead7;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.on-air-lamp {
+  padding: 5px 16px;
+  border-radius: 6px;
+  background: #321510;
+  color: #db9b8d;
+  font-size: clamp(18px, 2vw, 27px);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: .12em;
+}
+.on-air-status { font-size: 12px; font-weight: 700; }
+.on-air-switch[data-active="true"] .on-air-lamp {
+  background: linear-gradient(#ff483c, #b6130a);
+  color: #fff3e9;
+  box-shadow: 0 0 16px #ff423a9e, inset 0 1px 0 #ffaea2;
+  text-shadow: 0 0 9px #fff8;
+}

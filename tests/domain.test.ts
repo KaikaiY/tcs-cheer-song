@@ -77,13 +77,18 @@ test("the song conversation starts after the festival greeting", () => {
     { role: "user" as const, text: "模型を見て、弟と一緒にびっくりしました。" },
   ];
   assert.equal(songTopicConversation(greeting), undefined);
+  assert.equal(songTopicConversation([
+    ...greeting,
+    { role: "assistant", text: "どんな模型だったの？" },
+    { role: "user", text: "弟と紙で作った飛行機を飛ばしたよ。" },
+  ]), undefined);
   const topic = { role: "assistant" as const, text: `模型いいね。${songTopicQuestion}` };
   const answer = { role: "user" as const, text: "歌にするなら昔のバンドの話かな。" };
-  assert.deepEqual(songTopicConversation([...greeting, topic, answer]), [topic, answer]);
+  assert.deepEqual(songTopicConversation([...greeting, topic, answer]), [{ ...topic, text: songTopicQuestion }, answer]);
   const transcribedTopic = { role: "assistant" as const, text: "模型いいね。何か、歌にしたいシーンってありますか？" };
-  assert.deepEqual(songTopicConversation([...greeting, transcribedTopic, answer]), [transcribedTopic, answer]);
+  assert.deepEqual(songTopicConversation([...greeting, transcribedTopic, answer]), [{ ...transcribedTopic, text: "何か、歌にしたいシーンってありますか？" }, answer]);
   const interruptedTopic = { role: "assistant" as const, text: "模型いいね。曲にしてみたい場面って" };
   assert.equal(songTopicConversation([...greeting, interruptedTopic]), undefined);
   const festivalChoice = { role: "user" as const, text: "今の模型の話を曲にしたい。" };
-  assert.deepEqual(songTopicConversation([...greeting, topic, festivalChoice]), [topic, festivalChoice]);
+  assert.deepEqual(songTopicConversation([...greeting, topic, festivalChoice]), [{ ...topic, text: songTopicQuestion }, festivalChoice]);
 });

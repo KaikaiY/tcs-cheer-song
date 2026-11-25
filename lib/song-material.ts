@@ -25,9 +25,14 @@ export function isSongWithdrawal(text: string) {
 export const songTopicQuestion = "曲にしてみたい場面って、何かある？";
 
 export function songTopicConversation(conversation: ConversationMessage[]) {
-  const start = conversation.findIndex(({ role, text }) => role === "assistant" &&
-    /(?:(?:(?:何か|なにか)[、\s]*)?(?:一曲|曲|歌)に(?:してみたい|したい|残したい)[、\s]*(?:場面|シーン|瞬間)(?:って|は|が)?[、\s]*(?:何か|なにか)?[、\s]*(?:ある|あった|あります)|どんな話を(?:一曲|曲|歌)にしたい|(?:一曲|曲|歌)に(?:したい|残したい|してほしい)話(?:って|は|が)?[、\s]*(?:ある|あった|どんな|聞かせて)|(?:曲の題材|曲にする話)(?:は|、)?[\s]*(?:何|どんな))/u.test(text));
-  return start < 0 ? undefined : conversation.slice(start);
+  for (const [index, turn] of conversation.entries()) {
+    if (turn.role !== "assistant") continue;
+    const question = turn.text.match(/(?:(?:(?:何か|なにか)[、\s]*)?(?:一曲|曲|歌)に(?:してみたい|したい|残したい)[、\s]*(?:場面|シーン|瞬間)(?:って|は|が)?[、\s]*(?:何か|なにか)?[、\s]*(?:ある|あった|あります)|どんな話を(?:一曲|曲|歌)にしたい|(?:一曲|曲|歌)に(?:したい|残したい|してほしい)話(?:って|は|が)?[、\s]*(?:ある|あった|どんな|聞かせて)|(?:曲の題材|曲にする話)(?:は|、)?[\s]*(?:何|どんな))/u);
+    if (question?.index === undefined) continue;
+    // Acknowledge the icebreaker in the same turn without passing it to material selection.
+    return [{ ...turn, text: turn.text.slice(question.index) }, ...conversation.slice(index + 1)];
+  }
+  return undefined;
 }
 
 export function materialConversation(conversation: ConversationMessage[], draft?: SongMaterial) {
